@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { chatReply, parseMustHaves } from "./chat";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { chatReply, parseJsonObject, parseMustHaves, sanitizeMatrix } from "./chat";
+import { openRouterChat } from "./openrouter";
 import { BROWSE_MATRIX, DEFAULT_MATRIX } from "./types";
 
 describe("chatReply", () => {
@@ -24,5 +25,76 @@ describe("chatReply", () => {
 
   it("treats yes as confirm", () => {
     expect(chatReply("yes", DEFAULT_MATRIX).rescore).toBe(true);
+  });
+});
+
+describe("sanitizeMatrix", () => {
+  it("keeps draft fields and maps SUV / 30k-style values", () => {
+    const next = sanitizeMatrix({ body: "SUV", maxPrice: 30000, awd: true, junk: "nope" }, BROWSE_MATRIX);
+    expect(next.body).toBe("suv");
+    expect(next.maxPrice).toBe(30000);
+    expect(next.awd).toBe(true);
+    expect(next.searchArea).toBe("Tampa, FL");
+    expect(next.maxMiles).toBeNull();
+  });
+
+  it("ignores invalid body values", () => {
+    const next = sanitizeMatrix({ body: "spaceship" }, DEFAULT_MATRIX);
+    expect(next.body).toBe("suv");
+  });
+});
+
+describe("parseJsonObject", () => {
+  it("reads JSON from a fenced blob", () => {
+    const parsed = parseJsonObject('Sure.\n```json\n{"reply":"ok","rescore":false}\n```');
+    expect(parsed?.reply).toBe("ok");
+  });
+});
+
+describe("openRouterChat", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("uses the parser when no OpenRouter key is set", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const result = await openRouterChat("SUV under 30k Tampa", BROWSE_MATRIX);
+    expect(result.source).toBe("parser");
+    expect(result.matrix.body).toBe("suv");
+    expect(result.rescore).toBe(false);
+  });
+
+  it("maps an OpenRouter JSON completion onto the matrix", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    reply: "I heard SUV under $30,000 in Tampa. Confirm and I’ll search.",
+                    matrix: { searchArea: "Tampa, FL", body: "suv", maxPrice: 30000, awd: true },
+                    awaitingConfirm: true,
+                    rescore: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      })),
+    );
+    const result = await openRouterChat("family SUV around 30k with AWD", BROWSE_MATRIX);
+    expect(result.source).toBe("openrouter");
+    expect(result.matrix.body).toBe("suv");
+    expect(result.matrix.maxPrice).toBe(30000);
+    expect(result.matrix.awd).toBe(true);
+    expect(result.rescore).toBe(false);
+    expect(result.reply).toMatch(/Confirm/);
   });
 });
