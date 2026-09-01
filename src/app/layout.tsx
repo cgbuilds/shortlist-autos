@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   applicationName: "Shortlist Autos",
   openGraph: {
     title: "Shortlist Autos",
-    description: "Tell chat what you need. Shortlist ranks sample Tampa-area listings on one map, then you copy a link to share it.",
+    description: "Tell chat what you need. Shortlist ranks sample Tampa-area cars in a photo gallery — switch to Split view for the map, then copy a link to share it.",
     url: "https://shortlist.autos",
     siteName: "Shortlist Autos",
     type: "website",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary",
     title: "Shortlist Autos",
-    description: "Tell chat what you need. Shortlist ranks sample Tampa-area listings on one map, then you copy a link to share it.",
+    description: "Tell chat what you need. Shortlist ranks sample Tampa-area cars in a photo gallery — switch to Split view for the map, then copy a link to share it.",
   },
 };
 
