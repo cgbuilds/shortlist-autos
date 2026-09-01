@@ -19,7 +19,7 @@ Chat-first used-car shortlist. Default layout is **Gallery** (4:3 desktop thumbn
 
 **Inventory:** `/api/search` goes through `src/lib/inventory.ts`. With `MARKETCHECK_API_KEY` it pulls live used cars near the user (or Tampa). Without a key, or if the live call fails, it uses the 16-car Tampa sample in `src/data/vehicles.ts`. This is not a Cars.com scrape.
 
-**Chat:** `/api/chat` uses **OpenRouter** when `OPENROUTER_API_KEY` is set (`openai/gpt-4o-mini` by default, override with `OPENROUTER_MODEL`). Confirm / “yes” still skip the model. If the key is missing or OpenRouter fails, the deterministic parser in `src/lib/chat.ts` is the fallback. LLM output is sanitized onto `MustHaveMatrix` before search.
+**Chat:** `/api/chat` uses **OpenRouter** when `OPENROUTER_API_KEY` is set. Model comes from `OPENROUTER_MODEL` (default `openrouter/auto`). Confirm / “yes” still skip the model. If the key is missing or OpenRouter fails, the deterministic parser in `src/lib/chat.ts` is the fallback. LLM output is sanitized onto `MustHaveMatrix` before search.
 
 **Flow:** `/app` shows nearby cars first (geolocation, else Tampa). Chat bounces until must-haves are set. Chat reads preferences back; **Confirm & search** (or “yes”) then searches and grades. Copy link shares a deflate-raw token in `/s#s1.…`.
 
@@ -69,4 +69,4 @@ Map: circle markers by grade band, 20-mile radius if geolocation succeeds and th
 1. Point the existing Vercel project at this GitHub repo (or import it) so source and production match.
 2. Port casa’s Supabase family accounts if those keys belong on autos too.
 3. Add `MARKETCHECK_API_KEY` on Vercel to serve live dealer listings instead of the Tampa sample.
-4. Add `OPENROUTER_API_KEY` on Vercel if chat should use a live model (already wired).
+4. `OPENROUTER_API_KEY` + `OPENROUTER_MODEL=openrouter/auto` are already wired.
