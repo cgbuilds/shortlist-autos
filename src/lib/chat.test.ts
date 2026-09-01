@@ -67,28 +67,27 @@ describe("openRouterChat", () => {
 
   it("maps an OpenRouter JSON completion onto the matrix", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            choices: [
-              {
-                message: {
-                  content: JSON.stringify({
-                    reply: "I heard SUV under $30,000 in Tampa. Confirm and I’ll search.",
-                    matrix: { searchArea: "Tampa, FL", body: "suv", maxPrice: 30000, awd: true },
-                    awaitingConfirm: true,
-                    rescore: false,
-                  }),
-                },
+    vi.stubEnv("OPENROUTER_MODEL", "openrouter/auto");
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  reply: "I heard SUV under $30,000 in Tampa. Confirm and I’ll search.",
+                  matrix: { searchArea: "Tampa, FL", body: "suv", maxPrice: 30000, awd: true },
+                  awaitingConfirm: true,
+                  rescore: false,
+                }),
               },
-            ],
-          }),
-      })),
-    );
+            },
+          ],
+        }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
     const result = await openRouterChat("family SUV around 30k with AWD", BROWSE_MATRIX);
     expect(result.source).toBe("openrouter");
     expect(result.matrix.body).toBe("suv");
@@ -96,5 +95,8 @@ describe("openRouterChat", () => {
     expect(result.matrix.awd).toBe(true);
     expect(result.rescore).toBe(false);
     expect(result.reply).toMatch(/Confirm/);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    const sent = JSON.parse(init.body) as { model: string };
+    expect(sent.model).toBe("openrouter/auto");
   });
 });
