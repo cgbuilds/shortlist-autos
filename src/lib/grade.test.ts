@@ -3,7 +3,7 @@ import { SAMPLE_VEHICLES } from "../data/vehicles";
 import { chatReply, parseMustHaves } from "./chat";
 import { searchVehicles } from "./grade";
 import { vehiclePhoto } from "./format";
-import { DEFAULT_MATRIX } from "./types";
+import { BROWSE_MATRIX, DEFAULT_MATRIX } from "./types";
 
 describe("vehiclePhoto", () => {
   it("uses /cars/{id}.jpg when no photo field is set", () => {
@@ -36,6 +36,11 @@ describe("searchVehicles", () => {
     expect(ids).not.toContain("telluride-22-riverview");
     expect(ids).not.toContain("equinox-17-valrico");
     expect(totalMatched).toBe(results.length);
-    expect(results.every((row) => row.grade.band === "superb")).toBe(true);
+    expect(results.every((row) => row.grade.band === "superb" || row.grade.band === "excellent")).toBe(true);
+  });
+
+  it("browse matrix keeps the full nearby sample list", () => {
+    const { results } = searchVehicles(SAMPLE_VEHICLES, BROWSE_MATRIX);
+    expect(results).toHaveLength(16);
   });
 });

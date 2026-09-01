@@ -15,15 +15,15 @@ This branch is a **source reconstruction** of that autos demo (routes, sample in
 
 ## Product
 
-Chat-first used-car shortlist. Default layout is **Gallery**: scoring copy + Cars.com / Autotrader / Search links. Photos stay a compact strip on mobile; on desktop they sit as a 4:3 thumbnail beside the copy (not a full-width banner). Tap a photo to open it full-size. **Split view** is the map + ranked list. Toggle is always available and saved in `localStorage` (`shortlist-autos-layout-v1`). Sample **Tampa-area** listings are filtered/scored. Copy link shares a deflate-raw token in `/s#s1.…`.
+Chat-first used-car shortlist. Default layout is **Gallery** (4:3 desktop thumbnail + compact mobile strip, source links, photo lightbox). **Split view** is the map + ranked list. Toggle is saved in `localStorage` (`shortlist-autos-layout-v1`).
 
-Car photos live in `public/cars/{listing-id}.jpg` (Wikimedia Commons, used as demo listing photos).
+**Inventory:** `/api/search` goes through `src/lib/inventory.ts`. With `MARKETCHECK_API_KEY` it pulls live used cars near the user (or Tampa). Without a key, or if the live call fails, it uses the 16-car Tampa sample in `src/data/vehicles.ts`. This is not a Cars.com scrape.
 
-Default matrix (from the live `/app` bundle):
+**Flow:** `/app` shows nearby cars first (geolocation, else Tampa). Chat bounces until must-haves are set. Chat reads preferences back; **Confirm & search** (or “yes”) then searches and grades. Copy link shares a deflate-raw token in `/s#s1.…`.
 
-```
-Tampa, FL · suv · $35,000 · 80,000 mi · 2018+ · 5 seats
-```
+Car photos live in `public/cars/{listing-id}.jpg` for sample rows (Wikimedia Commons). Live rows use the listing photo when the feed includes one.
+
+Default **browse** matrix is location-only (Tampa, FL). Must-haves are empty until confirmed.
 
 Demo identity shown in the header: `family@demo.local`. Cookie: `sa_demo=1` (httpOnly, 30 days).
 
@@ -36,16 +36,16 @@ Demo identity shown in the header: `family@demo.local`. Cookie: `sa_demo=1` (htt
 | `GET /s` | Decode hash share → write session → `/app?shared=1` |
 | `POST /api/demo` | Sets demo cookie, `{ok:true}` |
 | `POST /api/logout` | Clears cookie |
-| `POST /api/search` | `{matrix, listings?}` → `{results, listings, totalMatched, source}` |
-| `POST /api/chat` | `{text, draft}` → `{reply, matrix, rescore}` |
+| `POST /api/search` | `{matrix, mode: "browse"|"grade", lat?, lng?, listings?}` → `{results, listings, totalMatched, source, origin}` |
+| `POST /api/chat` | `{text, draft, confirm?}` → `{reply, matrix, rescore, awaitingConfirm}` |
 
 Chat without `text` → `400 {"error":"Missing text"}`. Search/chat without demo cookie → `401`.
 
 ## Inventory
 
-16 sample vehicles are in `src/data/vehicles.ts` (IDs like `rav4-21-tampa`, `cx5-20-lutz`). Live `/api/search` `source` is `"sample"`.
+`loadInventory` tries MarketCheck when `MARKETCHECK_API_KEY` is present (`GET https://api.marketcheck.com/v2/search/car/active`). Otherwise 16 sample vehicles in `src/data/vehicles.ts` (IDs like `rav4-21-tampa`, `cx5-20-lutz`). Search `source` is `"live"`, `"sample"`, or `"session"` (shared lists).
 
-Outbound listing links: Cars.com (zip+keyword), Autotrader (zip+make), Google search.
+Outbound listing links: Cars.com (zip+keyword), Autotrader (zip+make), Google search. Live rows prefer `listingUrl` from the feed.
 
 ## Stack
 
@@ -58,8 +58,8 @@ Map: circle markers by grade band, 20-mile radius if geolocation succeeds and th
 ## What is still not in this repo (live-only / next work)
 
 - Supabase Google / magic-link (casa landing mentions keys; autos Vercel currently shows **demo only**)
-- Live inventory search beyond the 16-car sample
-- LLM-backed chat (production chat likely has a server key; this reconstruction uses a deterministic parser that matches the observed Tampa SUV / 30k / AWD / CarPlay reply)
+- Live inventory requires a MarketCheck key on Vercel (`MARKETCHECK_API_KEY`); without it the Tampa sample is the production fallback
+- LLM-backed chat (this reconstruction uses a deterministic parser)
 - Quota system (casa `/api/search` returns quota; autos sample search does not)
 - Custom domain / Vercel project wiring for this GitHub repo (the live project is already deployed from another source)
 
@@ -67,5 +67,5 @@ Map: circle markers by grade band, 20-mile radius if geolocation succeeds and th
 
 1. Point the existing Vercel project at this GitHub repo (or import it) so source and production match.
 2. Port casa’s Supabase family accounts if those keys belong on autos too.
-3. Replace sample listings with a real Tampa inventory feed once the source of the live sample is known.
+3. Add `MARKETCHECK_API_KEY` on Vercel to serve live dealer listings instead of the Tampa sample.
 4. If an OpenAI/Anthropic key is added, swap `chatReply` for the same JSON matrix contract.

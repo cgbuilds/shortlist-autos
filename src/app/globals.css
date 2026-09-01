@@ -54,7 +54,14 @@ body {
 }
 
 .chat-bounce {
-  animation: chat-bounce 1.6s ease-in-out 0.4s 3;
+  animation: chat-bounce 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-bounce,
+  .chat-composer-pulse {
+    animation: none;
+  }
 }
 
 @keyframes chat-composer-pulse {

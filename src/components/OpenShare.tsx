@@ -16,7 +16,7 @@ export function OpenShare() {
         setError("That share link doesn’t look valid.");
         return;
       }
-      writeStoredSession({ listings: payload.listings, matrix: payload.matrix, hasOwnList: true });
+      writeStoredSession({ listings: payload.listings, matrix: payload.matrix, hasOwnList: true, confirmed: true });
       try {
         await fetch("/api/demo", { method: "POST" });
       } catch {
