@@ -52,7 +52,15 @@ function ChatSheet({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: value, draft: matrix, confirm }),
+        body: JSON.stringify({
+          text: value,
+          draft: matrix,
+          confirm,
+          history: messages.slice(-8).map((msg) => ({
+            role: msg.role === "user" ? "user" : "assistant",
+            content: msg.content,
+          })),
+        }),
       });
       const data = (await res.json()) as {
         reply?: string;

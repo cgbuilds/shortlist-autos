@@ -1,7 +1,10 @@
 import type { BodyStyle, Fuel, MustHaveMatrix } from "@/lib/types";
 import { DEFAULT_MATRIX } from "@/lib/types";
 
-const BODIES: Array<{ re: RegExp; body: BodyStyle }> = [
+const BODIES: BodyStyle[] = ["suv", "crossover", "sedan", "minivan", "truck", "hatchback", "coupe", "wagon"];
+const FUELS: Fuel[] = ["gas", "hybrid", "plugin-hybrid", "ev"];
+
+const BODY_RES: Array<{ re: RegExp; body: BodyStyle }> = [
   { re: /\bmini\s*van|odyssey|sienna|pacifica\b/i, body: "minivan" },
   { re: /\b(suv|crossover|rav4|cr-?v|cx-?5|telluride|pilot|highlander|tucson|model y)\b/i, body: "suv" },
   { re: /\b(truck|f-?150|tacoma|silverado|ranger)\b/i, body: "truck" },
@@ -82,7 +85,7 @@ export function formatMustHaves(matrix: MustHaveMatrix): string {
 
 export function parseMustHaves(text: string, draft: MustHaveMatrix = DEFAULT_MATRIX): MustHaveMatrix {
   const next: MustHaveMatrix = { ...draft };
-  const body = BODIES.find((item) => item.re.test(text));
+  const body = BODY_RES.find((item) => item.re.test(text));
   if (body) next.body = body.body;
   const price = parseMoney(text);
   if (price) next.maxPrice = price;
@@ -105,11 +108,79 @@ export function parseMustHaves(text: string, draft: MustHaveMatrix = DEFAULT_MAT
   return next;
 }
 
+function asBody(value: unknown): BodyStyle | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim().toLowerCase().replace(/\s+/g, "");
+  if (v === "crossover" || v === "suvcrossover") return "suv";
+  return BODIES.find((body) => body === v) ?? null;
+}
+
+function asFuel(value: unknown): Fuel | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim().toLowerCase().replace(/[_\s]+/g, "-");
+  if (v === "electric" || v === "bev") return "ev";
+  if (v === "phev" || v === "plug-in" || v === "plugin") return "plugin-hybrid";
+  return FUELS.find((fuel) => fuel === v) ?? null;
+}
+
+function asInt(value: unknown, min: number, max: number): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value.replace(/[$,]/g, "")) : NaN;
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n);
+  if (rounded < min || rounded > max) return null;
+  return rounded;
+}
+
+function asBool(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  if (value === "true" || value === 1) return true;
+  if (value === "false" || value === 0) return false;
+  return fallback;
+}
+
+/** Keep LLM output on the MustHaveMatrix contract; unspecified fields stay on the draft. */
+export function sanitizeMatrix(raw: unknown, draft: MustHaveMatrix): MustHaveMatrix {
+  const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const searchArea =
+    typeof src.searchArea === "string" && src.searchArea.trim().length >= 2 && src.searchArea.trim().length <= 80
+      ? src.searchArea.trim()
+      : draft.searchArea;
+  return {
+    searchArea,
+    maxPrice: src.maxPrice === undefined ? draft.maxPrice : src.maxPrice === null ? null : (asInt(src.maxPrice, 1000, 500000) ?? draft.maxPrice),
+    maxMiles: src.maxMiles === undefined ? draft.maxMiles : src.maxMiles === null ? null : (asInt(src.maxMiles, 1000, 400000) ?? draft.maxMiles),
+    minYear: src.minYear === undefined ? draft.minYear : src.minYear === null ? null : (asInt(src.minYear, 1990, new Date().getFullYear() + 1) ?? draft.minYear),
+    body: src.body === undefined ? draft.body : src.body === null ? null : (asBody(src.body) ?? draft.body),
+    awd: src.awd === undefined ? draft.awd : asBool(src.awd, draft.awd),
+    minSeats: src.minSeats === undefined ? draft.minSeats : (asInt(src.minSeats, 2, 15) ?? draft.minSeats),
+    carplay: src.carplay === undefined ? draft.carplay : asBool(src.carplay, draft.carplay),
+    backupCamera: src.backupCamera === undefined ? draft.backupCamera : asBool(src.backupCamera, draft.backupCamera),
+    tow: src.tow === undefined ? draft.tow : asBool(src.tow, draft.tow),
+    fuel: src.fuel === undefined ? draft.fuel : src.fuel === null ? null : (asFuel(src.fuel) ?? draft.fuel),
+  };
+}
+
+export function parseJsonObject(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const raw = fenced ? fenced[1].trim() : trimmed;
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 export type ChatReply = {
   reply: string;
   matrix: MustHaveMatrix;
   rescore: boolean;
   awaitingConfirm: boolean;
+  source?: "openrouter" | "parser";
 };
 
 const CONFIRM_RE =
