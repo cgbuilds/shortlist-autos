@@ -1,5 +1,5 @@
-import type { MustHaveMatrix, Vehicle } from "@/lib/types";
-import { SESSION_KEY } from "@/lib/types";
+import type { LayoutMode, MustHaveMatrix, Vehicle } from "@/lib/types";
+import { LAYOUT_KEY, SESSION_KEY } from "@/lib/types";
 import { looksLikeMatrix, sanitizeVehicles } from "@/lib/grade";
 
 export type StoredSession = {
@@ -22,6 +22,24 @@ export function readStoredSession(): StoredSession {
     };
   } catch {
     return { listings: [], savedAt: 0 };
+  }
+}
+
+export function readLayoutMode(): LayoutMode {
+  try {
+    const raw = window.localStorage.getItem(LAYOUT_KEY);
+    if (raw === "split" || raw === "gallery") return raw;
+  } catch {
+    /* ignore */
+  }
+  return "gallery";
+}
+
+export function writeLayoutMode(mode: LayoutMode): void {
+  try {
+    window.localStorage.setItem(LAYOUT_KEY, mode);
+  } catch {
+    /* ignore */
   }
 }
 

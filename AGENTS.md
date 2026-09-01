@@ -15,7 +15,9 @@ This branch is a **source reconstruction** of that autos demo (routes, sample in
 
 ## Product
 
-Chat-first used-car shortlist. User sets must-haves in chat. Sample **Tampa-area** listings are filtered/scored and shown on one map. Copy link shares a deflate-raw token in `/s#s1.…`.
+Chat-first used-car shortlist. Default layout is **Gallery** (photos of the cars). **Split view** is the map + ranked list. Toggle is always available and saved in `localStorage` (`shortlist-autos-layout-v1`). Sample **Tampa-area** listings are filtered/scored. Copy link shares a deflate-raw token in `/s#s1.…`.
+
+Car photos live in `public/cars/{listing-id}.jpg` (Wikimedia Commons, used as demo listing photos).
 
 Default matrix (from the live `/app` bundle):
 
