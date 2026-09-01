@@ -23,16 +23,26 @@ export function hasMustHaves(matrix: MustHaveMatrix): boolean {
   );
 }
 
+function bodyMatches(listing: Vehicle, matrix: MustHaveMatrix): boolean {
+  if (!matrix.body) return true;
+  if (listing.body === matrix.body) return true;
+  if (matrix.body === "suv" && listing.body === "crossover") return true;
+  if (matrix.body === "crossover" && listing.body === "suv") return true;
+  return false;
+}
+
 export function mustHaveFailed(listing: Vehicle, matrix: MustHaveMatrix): boolean {
-  if (matrix.body && listing.body !== matrix.body) return true;
+  if (!bodyMatches(listing, matrix)) return true;
   if (matrix.maxPrice != null && listing.price > matrix.maxPrice) return true;
   if (matrix.maxMiles != null && listing.miles > matrix.maxMiles) return true;
   if (matrix.minYear != null && listing.year < matrix.minYear) return true;
   if (matrix.awd && !isAwd(listing)) return true;
   if (matrix.minSeats > 5 && listing.seats < matrix.minSeats) return true;
-  if (matrix.carplay && !listing.carplay) return true;
-  if (matrix.backupCamera && !listing.backupCamera) return true;
-  if (matrix.tow && !listing.tow) return true;
+  if (!listing.featuresUnknown) {
+    if (matrix.carplay && !listing.carplay) return true;
+    if (matrix.backupCamera && !listing.backupCamera) return true;
+    if (matrix.tow && !listing.tow) return true;
+  }
   if (matrix.fuel && listing.fuel !== matrix.fuel) return true;
   return false;
 }

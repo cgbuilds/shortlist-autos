@@ -324,6 +324,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
   const [confirmed, setConfirmed] = useState(false);
   const [searching, setSearching] = useState(false);
   const [source, setSource] = useState<"live" | "sample" | "session">("sample");
+  const [notice, setNotice] = useState<{ level: "error" | "warning"; message: string } | null>(null);
   const [sharedBanner, setSharedBanner] = useState(false);
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [hasOwnList, setHasOwnList] = useState(false);
@@ -370,12 +371,20 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
         totalMatched?: number;
         source?: "live" | "sample" | "session";
         origin?: { label?: string };
+        notice?: { level?: "error" | "warning"; message?: string };
+        error?: string;
       };
+      if (!res.ok) {
+        setNotice({ level: "error", message: typeof data.error === "string" ? data.error : `Search failed (HTTP ${res.status}).` });
+        setRows([]);
+        return;
+      }
       const results = data.results ?? [];
       setRows(results);
       setMatched(data.totalMatched ?? results.length);
       setSelected(results[0]?.listing.id ?? null);
       if (data.source) setSource(data.source);
+      setNotice(data.notice?.message ? { level: data.notice.level === "error" ? "error" : "warning", message: data.notice.message } : null);
       const withArea = data.origin?.label ? { ...next, searchArea: data.origin.label } : next;
       setMatrix(withArea);
       writeStoredSession({
@@ -384,6 +393,9 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
         hasOwnList: ownList,
         confirmed: mode === "grade",
       });
+    } catch {
+      setNotice({ level: "error", message: "Couldn’t reach search. Check your connection and try Confirm & search again." });
+      setRows([]);
     } finally {
       setSearching(false);
     }
@@ -457,6 +469,14 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
           to search and grade.
         </p>
       )}
+      {notice ? (
+        <div className={`flex shrink-0 items-start justify-between gap-3 border-b px-3 py-2 text-sm ${notice.level === "error" ? "border-red-300 bg-red-50 text-red-950" : "border-[var(--line)] bg-[var(--paper-2)] text-[var(--ink)]"}`}>
+          <p>{notice.message}</p>
+          <button type="button" className="shrink-0 text-xs text-[var(--muted)]" onClick={() => setNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2">
         <p className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{headline}</p>
         <ViewToggle mode={layout} onChange={changeLayout} />
@@ -465,7 +485,18 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
       <div className="relative min-h-0 flex-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:p-3">
         {layout === "gallery" ? (
           <div className="h-full min-h-0 overflow-y-auto rounded-3xl border-2 border-[var(--line)] bg-[color-mix(in_oklab,var(--ink)_7%,var(--paper))]">
-            <Gallery rows={rows} selectedId={selected} onSelect={setSelected} graded={graded} />
+            <Gallery
+              rows={rows}
+              selectedId={selected}
+              onSelect={setSelected}
+              graded={graded}
+              emptyMessage={
+                notice?.message ||
+                (graded
+                  ? "Nothing matched those must-haves. Adjust them in Chat and confirm to search again."
+                  : "No cars near this location yet. Set must-haves in Chat.")
+              }
+            />
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col gap-2 rounded-3xl border-2 border-[var(--line)] bg-[color-mix(in_oklab,var(--ink)_7%,var(--paper))] p-2 md:flex-row md:gap-3 md:p-3">

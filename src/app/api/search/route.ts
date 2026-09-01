@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { formatMustHaves } from "@/lib/chat";
 import { looksLikeMatrix, sanitizeVehicles, searchVehicles } from "@/lib/grade";
 import { loadInventory } from "@/lib/inventory";
 import { BROWSE_MATRIX, DEMO_COOKIE } from "@/lib/types";
@@ -28,13 +29,22 @@ export async function POST(request: Request) {
       ? { lat: body.lat, lng: body.lng }
       : null;
   const inventory = owned.length
-    ? { listings: owned, source: "session" as const, origin: undefined }
+    ? { listings: owned, source: "session" as const, origin: undefined, scanned: owned.length, notice: undefined }
     : await loadInventory({ matrix, mode, here });
   const result = searchVehicles(inventory.listings, matrix);
+  let notice = inventory.notice;
+  if (mode === "grade" && result.results.length === 0) {
+    const area = inventory.origin?.label || matrix.searchArea;
+    const empty = `Searched ${inventory.listings.length} ${inventory.source} cars near ${area}. None met ${formatMustHaves(matrix)}.`;
+    notice = notice ? { ...notice, message: `${notice.message} ${empty}` } : { level: "warning", message: empty };
+  }
   return NextResponse.json({
     ...result,
     source: inventory.source,
     mode,
     origin: inventory.origin,
+    scanned: inventory.scanned ?? inventory.listings.length,
+    notice,
   });
 }
+

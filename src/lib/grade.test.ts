@@ -39,6 +39,13 @@ describe("searchVehicles", () => {
     expect(results.every((row) => row.grade.band === "superb" || row.grade.band === "excellent")).toBe(true);
   });
 
+  it("does not drop live cars for CarPlay when options are unknown", () => {
+    const listing = SAMPLE_VEHICLES[0];
+    const live = { ...listing, carplay: false, featuresUnknown: true };
+    const matrix = { ...DEFAULT_MATRIX, carplay: true, body: listing.body, maxPrice: listing.price + 1000 };
+    expect(searchVehicles([live], matrix).results).toHaveLength(1);
+  });
+
   it("browse matrix keeps the full nearby sample list", () => {
     const { results } = searchVehicles(SAMPLE_VEHICLES, BROWSE_MATRIX);
     expect(results).toHaveLength(16);

@@ -27,6 +27,8 @@ export type Vehicle = {
   tow: boolean;
   listingUrl?: string;
   photo?: string;
+  /** Live feed often omits options; don’t fail CarPlay/camera/tow must-haves. */
+  featuresUnknown?: boolean;
 };
 
 export type LayoutMode = "gallery" | "split";
