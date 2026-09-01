@@ -8,7 +8,7 @@ Sister product: homes at [shortlist.casa](https://shortlist.casa).
 
 - Demo sign-in (`Continue in demo mode`)
 - Chat sets a must-have matrix (area, body, budget, miles, year, AWD, seats, CarPlay, tow, fuel)
-- Sample Tampa-area listings are scored and ranked on a Leaflet map
+- Sample Tampa-area listings scored in a photo **Gallery** (default) or map **Split view**
 - Copy a compressed share link (`/s#s1.…`)
 
 ## Run locally

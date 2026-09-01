@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { SAMPLE_VEHICLES } from "../data/vehicles";
 import { chatReply, parseMustHaves } from "./chat";
 import { searchVehicles } from "./grade";
+import { vehiclePhoto } from "./format";
 import { DEFAULT_MATRIX } from "./types";
+
+describe("vehiclePhoto", () => {
+  it("uses /cars/{id}.jpg when no photo field is set", () => {
+    expect(vehiclePhoto(SAMPLE_VEHICLES[0])).toBe(`/cars/${SAMPLE_VEHICLES[0].id}.jpg`);
+  });
+});
 
 describe("parseMustHaves", () => {
   it("extracts Tampa SUV budget AWD CarPlay like the live chat API", () => {
