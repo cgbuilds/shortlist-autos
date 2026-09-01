@@ -2,11 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MustHaveMatrix, RankedRow, Vehicle } from "@/lib/types";
-import { DEFAULT_MATRIX } from "@/lib/types";
+import { Gallery } from "@/components/Gallery";
+import { ViewToggle } from "@/components/ViewToggle";
 import { formatMustHaves } from "@/lib/chat";
-import { formatVehicleLine, gradeCaption, outboundLinks, readPhoneLocation, resultsHeadline, vehicleTitle } from "@/lib/format";
-import { encodeShare, readStoredSession, shareUrlFromToken, writeStoredSession } from "@/lib/session";
+import { formatVehicleLine, gradeCaption, outboundLinks, readPhoneLocation, resultsHeadline, vehiclePhoto, vehicleTitle } from "@/lib/format";
+import { encodeShare, readLayoutMode, readStoredSession, shareUrlFromToken, writeLayoutMode, writeStoredSession } from "@/lib/session";
+import type { LayoutMode, MustHaveMatrix, RankedRow, Vehicle } from "@/lib/types";
+import { DEFAULT_MATRIX } from "@/lib/types";
 
 const Map = dynamic(() => import("@/components/ResultsMap").then((m) => m.ResultsMap), {
   ssr: false,
@@ -250,7 +252,12 @@ function ListingCard({ listing, grade }: RankedRow) {
   const links = outboundLinks(listing);
   const caption = gradeCaption(grade);
   return (
-    <article className="rounded-2xl border border-[var(--line)] bg-[var(--paper-2)] p-4">
+    <article className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-2)]">
+      <div className="aspect-[16/10] overflow-hidden bg-[var(--paper)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={vehiclePhoto(listing)} alt={vehicleTitle(listing)} className="h-full w-full object-cover" />
+      </div>
+      <div className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-[family-name:var(--font-display)] text-lg">{vehicleTitle(listing)}</p>
@@ -272,6 +279,7 @@ function ListingCard({ listing, grade }: RankedRow) {
           </a>
         ))}
       </div>
+      </div>
     </article>
   );
 }
@@ -287,6 +295,12 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
   const [sharedBanner, setSharedBanner] = useState(false);
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [hasOwnList, setHasOwnList] = useState(false);
+  const [layout, setLayout] = useState<LayoutMode>("gallery");
+
+  function changeLayout(next: LayoutMode) {
+    setLayout(next);
+    writeLayoutMode(next);
+  }
 
   const openChat = useCallback(() => {
     setInvite(false);
@@ -324,6 +338,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
     const start = stored.matrix ?? matrix;
     if (stored.matrix) setMatrix(stored.matrix);
     if (stored.hasOwnList) setHasOwnList(true);
+    setLayout(readLayoutMode());
     void rescore(start, stored.listings.length ? stored.listings : undefined);
     void readPhoneLocation().then((loc) => loc && setHere(loc));
     const html = document.documentElement;
@@ -348,44 +363,51 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
         </div>
       ) : (
         <p className="hidden shrink-0 border-b border-[var(--line)] px-3 py-2 text-sm md:block">
-          Sample Tampa-area cars. Set must-haves in{" "}
+          Photos first. Use Split view for the map. Set must-haves in{" "}
           <button type="button" className="font-medium underline" onClick={openChat}>
             Chat
           </button>
           .
         </p>
       )}
-      <div className="min-h-0 flex-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:p-3">
-        <div className="flex h-full min-h-0 flex-col gap-2 rounded-3xl border-2 border-[var(--line)] bg-[color-mix(in_oklab,var(--ink)_7%,var(--paper))] p-2 md:flex-row md:gap-3 md:p-3">
-          <section className="relative min-h-0 min-w-0 flex-1">
-            <div className="absolute inset-0 overflow-hidden rounded-2xl border-2 border-[var(--ink)]/25 bg-[var(--paper-2)] shadow-sm">
-              <Map
-                rows={rows}
-                selectedId={selected}
-                onSelect={setSelected}
-                layoutTick={`${chatOpen ? "chat" : "map"}:${rows.length}`}
-                here={here}
-                lockToHere={!!here && !hasOwnList}
-              />
-            </div>
-            {chatOpen ? null : <ChatFab className="absolute bottom-3 right-3 z-20" nudge={invite} onClick={openChat} />}
-          </section>
-          <section className="flex h-[min(42svh,22rem)] min-h-[11rem] w-full shrink-0 flex-col overflow-hidden rounded-2xl border-2 border-[var(--ink)]/25 bg-[var(--paper-2)] shadow-sm md:h-full md:min-h-0 md:w-[22rem] md:flex-none xl:w-[26rem]">
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2">
-              <p className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{resultsHeadline(rows.length, matched)}</p>
-              <CopyLink matrix={matrix} listings={rows.map((row) => row.listing)} />
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              <div className="space-y-3">
-                {rows.map((row) => (
-                  <div key={row.listing.id} onClick={() => setSelected(row.listing.id)} className={row.listing.id === selected ? "rounded-2xl ring-2 ring-[var(--accent)]" : ""}>
-                    <ListingCard listing={row.listing} grade={row.grade} />
-                  </div>
-                ))}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2">
+        <p className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{resultsHeadline(rows.length, matched)}</p>
+        <ViewToggle mode={layout} onChange={changeLayout} />
+        <CopyLink matrix={matrix} listings={rows.map((row) => row.listing)} />
+      </div>
+      <div className="relative min-h-0 flex-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:p-3">
+        {layout === "gallery" ? (
+          <div className="h-full min-h-0 overflow-y-auto rounded-3xl border-2 border-[var(--line)] bg-[color-mix(in_oklab,var(--ink)_7%,var(--paper))]">
+            <Gallery rows={rows} selectedId={selected} onSelect={setSelected} />
+          </div>
+        ) : (
+          <div className="flex h-full min-h-0 flex-col gap-2 rounded-3xl border-2 border-[var(--line)] bg-[color-mix(in_oklab,var(--ink)_7%,var(--paper))] p-2 md:flex-row md:gap-3 md:p-3">
+            <section className="relative min-h-0 min-w-0 flex-1">
+              <div className="absolute inset-0 overflow-hidden rounded-2xl border-2 border-[var(--ink)]/25 bg-[var(--paper-2)] shadow-sm">
+                <Map
+                  rows={rows}
+                  selectedId={selected}
+                  onSelect={setSelected}
+                  layoutTick={`${chatOpen ? "chat" : "map"}:${rows.length}:${layout}`}
+                  here={here}
+                  lockToHere={!!here && !hasOwnList}
+                />
               </div>
-            </div>
-          </section>
-        </div>
+            </section>
+            <section className="flex h-[min(42svh,22rem)] min-h-[11rem] w-full shrink-0 flex-col overflow-hidden rounded-2xl border-2 border-[var(--ink)]/25 bg-[var(--paper-2)] shadow-sm md:h-full md:min-h-0 md:w-[22rem] md:flex-none xl:w-[26rem]">
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <div className="space-y-3">
+                  {rows.map((row) => (
+                    <div key={row.listing.id} onClick={() => setSelected(row.listing.id)} className={row.listing.id === selected ? "rounded-2xl ring-2 ring-[var(--accent)]" : ""}>
+                      <ListingCard listing={row.listing} grade={row.grade} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+        {chatOpen ? null : <ChatFab className="absolute bottom-5 right-5 z-20" nudge={invite} onClick={openChat} />}
       </div>
       <ChatModal open={chatOpen} onClose={closeChat} onKeyboard={setKeyboard}>
         <ChatSheet

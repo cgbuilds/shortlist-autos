@@ -1,6 +1,10 @@
 import type { Vehicle } from "@/lib/types";
 import { SEARCH_RADIUS_MILES } from "@/lib/types";
 
+export function vehiclePhoto(listing: Vehicle): string {
+  return listing.photo || `/cars/${listing.id}.jpg`;
+}
+
 export function formatPrice(n: number): string {
   return `$${n.toLocaleString()}`;
 }

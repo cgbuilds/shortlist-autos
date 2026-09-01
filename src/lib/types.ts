@@ -26,7 +26,12 @@ export type Vehicle = {
   backupCamera: boolean;
   tow: boolean;
   listingUrl?: string;
+  photo?: string;
 };
+
+export type LayoutMode = "gallery" | "split";
+
+export const LAYOUT_KEY = "shortlist-autos-layout-v1";
 
 export type MustHaveMatrix = {
   searchArea: string;
