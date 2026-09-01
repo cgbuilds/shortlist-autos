@@ -41,16 +41,22 @@ export function Gallery({
   rows,
   selectedId,
   onSelect,
+  graded = true,
 }: {
   rows: RankedRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  graded?: boolean;
 }) {
   const [lightboxId, setLightboxId] = useState<string | null>(null);
   const lightbox = rows.find((row) => row.listing.id === lightboxId)?.listing ?? null;
 
   if (!rows.length) {
-    return <p className="p-6 text-sm text-[var(--muted)]">No cars yet. Set must-haves in Chat.</p>;
+    return (
+      <p className="p-6 text-sm text-[var(--muted)]">
+        {graded ? "Nothing matched those must-haves. Adjust them in Chat and confirm to search again." : "No cars near this location yet. Set must-haves in Chat."}
+      </p>
+    );
   }
 
   return (
@@ -81,9 +87,13 @@ export function Gallery({
                   alt=""
                   className="h-28 w-full object-cover object-center md:aspect-[4/3] md:h-auto"
                 />
-                <span className="absolute right-2 top-2 rounded-full bg-[var(--ink)] px-2.5 py-1 text-xs text-[var(--paper)]">
-                  {caption.score} {caption.word}
-                </span>
+                {graded ? (
+                  <span className="absolute right-2 top-2 rounded-full bg-[var(--ink)] px-2.5 py-1 text-xs text-[var(--paper)]">
+                    {caption.score} {caption.word}
+                  </span>
+                ) : (
+                  <span className="absolute right-2 top-2 rounded-full bg-[var(--ink)] px-2.5 py-1 text-xs text-[var(--paper)]">Nearby</span>
+                )}
               </button>
               <div className="min-w-0 flex-1 p-4">
                 <div className="flex items-start justify-between gap-3">

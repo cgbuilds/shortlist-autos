@@ -7,8 +7,8 @@ import { ViewToggle } from "@/components/ViewToggle";
 import { formatMustHaves } from "@/lib/chat";
 import { formatVehicleLine, gradeCaption, outboundLinks, readPhoneLocation, resultsHeadline, vehiclePhoto, vehicleTitle } from "@/lib/format";
 import { encodeShare, readLayoutMode, readStoredSession, shareUrlFromToken, writeLayoutMode, writeStoredSession } from "@/lib/session";
-import type { LayoutMode, MustHaveMatrix, RankedRow, Vehicle } from "@/lib/types";
-import { DEFAULT_MATRIX } from "@/lib/types";
+import type { LayoutMode, MustHaveMatrix, RankedRow, SearchMode, Vehicle } from "@/lib/types";
+import { BROWSE_MATRIX } from "@/lib/types";
 
 const Map = dynamic(() => import("@/components/ResultsMap").then((m) => m.ResultsMap), {
   ssr: false,
@@ -18,34 +18,52 @@ const Map = dynamic(() => import("@/components/ResultsMap").then((m) => m.Result
 function ChatSheet({
   matrix,
   invite,
+  awaitingConfirm,
+  searching,
   onClose,
-  onResult,
+  onDraft,
+  onConfirm,
 }: {
   matrix: MustHaveMatrix;
   invite: boolean;
+  awaitingConfirm: boolean;
+  searching: boolean;
   onClose?: () => void;
-  onResult: (matrix: MustHaveMatrix) => void;
+  onDraft: (matrix: MustHaveMatrix) => void;
+  onConfirm: (matrix: MustHaveMatrix) => void;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [messages, setMessages] = useState([{ role: "assistant", content: "You’re looking at a sample Tampa-area list (used SUVs around $35k, 80k miles, 2018+). Tell me body style, budget, miles, year, AWD, seats, CarPlay." }]);
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      content:
+        "You’re looking at used cars near this location (Tampa if we can’t read one). Tell me body style, budget, miles, year, AWD, seats, CarPlay. I’ll read it back — confirm, and I’ll search and grade.",
+    },
+  ]);
 
-  async function send() {
-    const value = text.trim();
-    if (!value || busy) return;
+  async function send(raw: string, confirm = false) {
+    const value = raw.trim();
+    if (!value || busy || searching) return;
     setText("");
     setBusy(true);
-    setMessages((m) => [...m, { role: "user", content: value }]);
+    if (!confirm) setMessages((m) => [...m, { role: "user", content: value }]);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: value, draft: matrix }),
+        body: JSON.stringify({ text: value, draft: matrix, confirm }),
       });
-      const data = (await res.json()) as { reply?: string; matrix?: MustHaveMatrix };
+      const data = (await res.json()) as {
+        reply?: string;
+        matrix?: MustHaveMatrix;
+        rescore?: boolean;
+        awaitingConfirm?: boolean;
+      };
       const reply = data.reply ?? "Send that again.";
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
-      if (data.matrix) onResult(data.matrix);
+      if (data.matrix && data.rescore) onConfirm(data.matrix);
+      else if (data.matrix) onDraft(data.matrix);
     } catch {
       setMessages((m) => [...m, { role: "assistant", content: "Couldn’t reach chat just then. Send that again." }]);
     } finally {
@@ -67,7 +85,7 @@ function ChatSheet({
         className="shrink-0 border-t border-[var(--line)] p-3"
         onSubmit={(e) => {
           e.preventDefault();
-          void send();
+          void send(text);
         }}
       >
         <textarea
@@ -80,18 +98,28 @@ function ChatSheet({
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              void send();
+              void send(text);
             }
           }}
           className={`w-full rounded-xl border bg-[var(--paper)] px-3 py-2 text-base ${invite ? "chat-composer-pulse border-[var(--accent)]" : "border-[var(--line)]"}`}
         />
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {onClose ? (
             <button type="button" className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-[var(--line)] px-4 text-base sm:hidden" onClick={onClose}>
               Done
             </button>
           ) : null}
-          <button className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-base text-white disabled:opacity-50" type="submit" disabled={busy}>
+          {awaitingConfirm ? (
+            <button
+              type="button"
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[var(--ink)] px-4 text-base text-[var(--paper)] disabled:opacity-50"
+              disabled={busy || searching}
+              onClick={() => void send("confirm", true)}
+            >
+              {searching ? "Searching…" : "Confirm & search"}
+            </button>
+          ) : null}
+          <button className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-base text-white disabled:opacity-50" type="submit" disabled={busy || searching}>
             {busy ? "On it…" : "Send"}
           </button>
         </div>
@@ -248,7 +276,7 @@ function CopyLink({ matrix, listings }: { matrix: MustHaveMatrix; listings: Vehi
   );
 }
 
-function ListingCard({ listing, grade }: RankedRow) {
+function ListingCard({ listing, grade, graded = true }: RankedRow & { graded?: boolean }) {
   const links = outboundLinks(listing);
   const caption = gradeCaption(grade);
   return (
@@ -267,7 +295,7 @@ function ListingCard({ listing, grade }: RankedRow) {
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-[var(--ink)] px-2.5 py-1 text-xs text-[var(--paper)]">
-          {caption.score} {caption.word}
+          {graded ? `${caption.score} ${caption.word}` : "Nearby"}
         </span>
       </div>
       {grade.why ? <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">{grade.why}</p> : null}
@@ -285,13 +313,17 @@ function ListingCard({ listing, grade }: RankedRow) {
 }
 
 export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix }) {
-  const [matrix, setMatrix] = useState<MustHaveMatrix>(initialMatrix ?? DEFAULT_MATRIX);
+  const [matrix, setMatrix] = useState<MustHaveMatrix>(initialMatrix ?? BROWSE_MATRIX);
   const [rows, setRows] = useState<RankedRow[]>([]);
   const [matched, setMatched] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [keyboard, setKeyboard] = useState(false);
   const [invite, setInvite] = useState(true);
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [source, setSource] = useState<"live" | "sample" | "session">("sample");
   const [sharedBanner, setSharedBanner] = useState(false);
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [hasOwnList, setHasOwnList] = useState(false);
@@ -309,24 +341,52 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
   const closeChat = useCallback(() => {
     setChatOpen(false);
     setKeyboard(false);
+    setInvite((on) => on);
   }, []);
 
-  async function rescore(next: MustHaveMatrix, listings?: Vehicle[]) {
-    const res = await fetch("/api/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matrix: next, listings }),
-    });
-    const data = (await res.json()) as { results?: RankedRow[]; listings?: Vehicle[]; totalMatched?: number };
-    const results = data.results ?? [];
-    setRows(results);
-    setMatched(data.totalMatched ?? results.length);
-    setSelected(results[0]?.listing.id ?? null);
-    writeStoredSession({
-      matrix: next,
-      listings: data.listings ?? results.map((row) => row.listing),
-      hasOwnList,
-    });
+  async function runSearch(
+    next: MustHaveMatrix,
+    mode: SearchMode,
+    options: { listings?: Vehicle[]; loc?: { lat: number; lng: number } | null; ownList?: boolean } = {},
+  ) {
+    setSearching(true);
+    try {
+      const ownList = options.ownList ?? hasOwnList;
+      const loc = options.loc === undefined ? here : options.loc;
+      const res = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          matrix: next,
+          mode,
+          listings: ownList ? options.listings : undefined,
+          lat: loc?.lat,
+          lng: loc?.lng,
+        }),
+      });
+      const data = (await res.json()) as {
+        results?: RankedRow[];
+        listings?: Vehicle[];
+        totalMatched?: number;
+        source?: "live" | "sample" | "session";
+        origin?: { label?: string };
+      };
+      const results = data.results ?? [];
+      setRows(results);
+      setMatched(data.totalMatched ?? results.length);
+      setSelected(results[0]?.listing.id ?? null);
+      if (data.source) setSource(data.source);
+      const withArea = data.origin?.label ? { ...next, searchArea: data.origin.label } : next;
+      setMatrix(withArea);
+      writeStoredSession({
+        matrix: withArea,
+        listings: data.listings ?? results.map((row) => row.listing),
+        hasOwnList: ownList,
+        confirmed: mode === "grade",
+      });
+    } finally {
+      setSearching(false);
+    }
   }
 
   useEffect(() => {
@@ -335,12 +395,26 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
       window.history.replaceState({}, "", "/app");
     }
     const stored = readStoredSession();
-    const start = stored.matrix ?? matrix;
-    if (stored.matrix) setMatrix(stored.matrix);
-    if (stored.hasOwnList) setHasOwnList(true);
     setLayout(readLayoutMode());
-    void rescore(start, stored.listings.length ? stored.listings : undefined);
-    void readPhoneLocation().then((loc) => loc && setHere(loc));
+    if (stored.hasOwnList) setHasOwnList(true);
+    void (async () => {
+      const loc = await readPhoneLocation();
+      if (loc) setHere(loc);
+      if (stored.confirmed && stored.matrix) {
+        setMatrix(stored.matrix);
+        setConfirmed(true);
+        setInvite(false);
+        await runSearch(stored.matrix, "grade", {
+          listings: stored.listings,
+          loc,
+          ownList: stored.hasOwnList,
+        });
+        return;
+      }
+      const start = { ...BROWSE_MATRIX };
+      setMatrix(start);
+      await runSearch(start, "browse", { listings: stored.listings, loc, ownList: stored.hasOwnList });
+    })();
     const html = document.documentElement;
     const body = document.body;
     html.style.overflow = "hidden";
@@ -351,6 +425,18 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (confirmed || chatOpen) return;
+    setInvite(true);
+  }, [confirmed, chatOpen]);
+
+  const graded = confirmed;
+  const headline = searching
+    ? "Searching…"
+    : graded
+      ? resultsHeadline(rows.length, matched)
+      : `Nearby in ${matrix.searchArea}`;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -363,22 +449,23 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
         </div>
       ) : (
         <p className="hidden shrink-0 border-b border-[var(--line)] px-3 py-2 text-sm md:block">
-          Photos first. Use Split view for the map. Set must-haves in{" "}
+          Photos first. Nearby cars load first
+          {source === "live" ? " from live listings" : source === "sample" ? " from the Tampa sample set" : ""}. Confirm must-haves in{" "}
           <button type="button" className="font-medium underline" onClick={openChat}>
             Chat
-          </button>
-          .
+          </button>{" "}
+          to search and grade.
         </p>
       )}
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2">
-        <p className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{resultsHeadline(rows.length, matched)}</p>
+        <p className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{headline}</p>
         <ViewToggle mode={layout} onChange={changeLayout} />
         <CopyLink matrix={matrix} listings={rows.map((row) => row.listing)} />
       </div>
       <div className="relative min-h-0 flex-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:p-3">
         {layout === "gallery" ? (
           <div className="h-full min-h-0 overflow-y-auto rounded-3xl border-2 border-[var(--line)] bg-[color-mix(in_oklab,var(--ink)_7%,var(--paper))]">
-            <Gallery rows={rows} selectedId={selected} onSelect={setSelected} />
+            <Gallery rows={rows} selectedId={selected} onSelect={setSelected} graded={graded} />
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col gap-2 rounded-3xl border-2 border-[var(--line)] bg-[color-mix(in_oklab,var(--ink)_7%,var(--paper))] p-2 md:flex-row md:gap-3 md:p-3">
@@ -399,7 +486,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
                 <div className="space-y-3">
                   {rows.map((row) => (
                     <div key={row.listing.id} onClick={() => setSelected(row.listing.id)} className={row.listing.id === selected ? "rounded-2xl ring-2 ring-[var(--accent)]" : ""}>
-                      <ListingCard listing={row.listing} grade={row.grade} />
+                      <ListingCard listing={row.listing} grade={row.grade} graded={graded} />
                     </div>
                   ))}
                 </div>
@@ -407,18 +494,33 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
             </section>
           </div>
         )}
-        {chatOpen ? null : <ChatFab className="absolute bottom-5 right-5 z-20" nudge={invite} onClick={openChat} />}
+        {searching ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_oklab,var(--paper)_55%,transparent)] text-sm font-medium">
+            Searching and grading…
+          </div>
+        ) : null}
+        {chatOpen ? null : <ChatFab className="absolute bottom-5 right-5 z-20" nudge={invite && !confirmed} onClick={openChat} />}
       </div>
       <ChatModal open={chatOpen} onClose={closeChat} onKeyboard={setKeyboard}>
         <ChatSheet
           matrix={matrix}
-          invite={invite}
+          invite={invite && !confirmed}
+          awaitingConfirm={awaitingConfirm}
+          searching={searching}
           onClose={closeChat}
-          onResult={(next) => {
+          onDraft={(next) => {
             setMatrix(next);
-            writeStoredSession({ matrix: next });
-            void rescore(next);
-            if (!keyboard) window.setTimeout(() => closeChat(), 650);
+            setAwaitingConfirm(true);
+            writeStoredSession({ matrix: next, confirmed: false });
+          }}
+          onConfirm={(next) => {
+            setMatrix(next);
+            setAwaitingConfirm(false);
+            setConfirmed(true);
+            setInvite(false);
+            void runSearch(next, "grade", { loc: here }).then(() => {
+              if (!keyboard) window.setTimeout(() => closeChat(), 400);
+            });
           }}
         />
       </ChatModal>

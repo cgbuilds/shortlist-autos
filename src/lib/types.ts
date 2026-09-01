@@ -59,6 +59,24 @@ export type RankedRow = {
   grade: Grade;
 };
 
+export type SearchMode = "browse" | "grade";
+
+/** Open the app on nearby inventory — no must-haves until the user confirms them. */
+export const BROWSE_MATRIX: MustHaveMatrix = {
+  searchArea: "Tampa, FL",
+  maxPrice: null,
+  maxMiles: null,
+  minYear: null,
+  body: null,
+  awd: false,
+  minSeats: 5,
+  carplay: false,
+  backupCamera: false,
+  tow: false,
+  fuel: null,
+};
+
+/** Example confirmed shortlist (tests / chat parser baseline). */
 export const DEFAULT_MATRIX: MustHaveMatrix = {
   searchArea: "Tampa, FL",
   maxPrice: 35000,

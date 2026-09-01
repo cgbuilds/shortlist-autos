@@ -7,7 +7,7 @@ export default function HomePage() {
         <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">Shortlist Autos</p>
         <h1 className="mt-3 font-[family-name:var(--font-display)] text-5xl leading-tight">Score cars against must-haves you set in chat.</h1>
         <p className="mt-4 max-w-md text-[var(--muted)]">
-          Tell chat what you need. Shortlist ranks sample Tampa-area cars in a photo gallery — switch to Split view for the map, then copy a link to share it. Sister app: homes at shortlist.casa.
+          Tell chat what you need, confirm it, then we search and grade cars near you — Tampa if we don’t have a location. Sister app: homes at shortlist.casa.
         </p>
       </div>
       <div className="rounded-3xl border border-[var(--line)] bg-[var(--paper-2)] p-6 shadow-sm">

@@ -105,12 +105,36 @@ export function parseMustHaves(text: string, draft: MustHaveMatrix = DEFAULT_MAT
   return next;
 }
 
-export function chatReply(text: string, draft: MustHaveMatrix): { reply: string; matrix: MustHaveMatrix; rescore: boolean } {
+export type ChatReply = {
+  reply: string;
+  matrix: MustHaveMatrix;
+  rescore: boolean;
+  awaitingConfirm: boolean;
+};
+
+const CONFIRM_RE =
+  /^(yes|yep|yeah|y|ok|okay|confirm|confirmed|looks good|sounds good|go ahead|search|do it|that'?s right|perfect)\b/i;
+
+export function isConfirmText(text: string): boolean {
+  return CONFIRM_RE.test(text.trim());
+}
+
+export function chatReply(text: string, draft: MustHaveMatrix, confirm = false): ChatReply {
+  if (confirm || isConfirmText(text)) {
+    const summary = formatMustHaves(draft);
+    return {
+      matrix: draft,
+      rescore: true,
+      awaitingConfirm: false,
+      reply: `Confirmed: ${summary}. Searching nearby listings and grading them now.`,
+    };
+  }
   const matrix = parseMustHaves(text, draft);
   const summary = formatMustHaves(matrix);
   return {
     matrix,
-    rescore: true,
-    reply: `Updated must-haves: ${summary}. I’ll rescore the sample Tampa list against that.`,
+    rescore: false,
+    awaitingConfirm: true,
+    reply: `I heard: ${summary}. Confirm these must-haves and I’ll run a fresh search and grade the matches.`,
   };
 }

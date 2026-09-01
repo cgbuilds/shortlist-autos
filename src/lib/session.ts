@@ -7,6 +7,7 @@ export type StoredSession = {
   matrix?: MustHaveMatrix;
   savedAt: number;
   hasOwnList?: boolean;
+  confirmed?: boolean;
 };
 
 export function readStoredSession(): StoredSession {
@@ -19,6 +20,7 @@ export function readStoredSession(): StoredSession {
       matrix: looksLikeMatrix(parsed.matrix) ? parsed.matrix : undefined,
       savedAt: parsed.savedAt ?? 0,
       hasOwnList: parsed.hasOwnList === true,
+      confirmed: parsed.confirmed === true,
     };
   } catch {
     return { listings: [], savedAt: 0 };
@@ -50,6 +52,7 @@ export function writeStoredSession(patch: Partial<StoredSession>): void {
     matrix: patch.matrix ?? current.matrix,
     savedAt: Date.now(),
     hasOwnList: patch.hasOwnList ?? current.hasOwnList,
+    confirmed: patch.confirmed ?? current.confirmed,
   });
   try {
     window.localStorage.setItem(SESSION_KEY, next);
