@@ -29,6 +29,7 @@ export type Vehicle = {
   photo?: string;
   /** Live feed often omits options; don’t fail CarPlay/camera/tow must-haves. */
   featuresUnknown?: boolean;
+  drivetrainUnknown?: boolean;
 };
 
 export type LayoutMode = "gallery" | "split";

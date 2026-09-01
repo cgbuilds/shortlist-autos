@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadInventory, mapBody, mapDrivetrain, mapLiveListing } from "./inventory";
+import { loadInventory, mapBody, mapDrivetrain, mapFuel, mapLiveListing, applyLocation } from "./inventory";
 import { originFromCoords, TAMPA } from "./location";
 import { BROWSE_MATRIX } from "./types";
 
@@ -37,6 +37,24 @@ describe("mapLiveListing", () => {
     expect(car?.body).toBe("suv");
     expect(car?.drivetrain).toBe("awd");
     expect(car?.featuresUnknown).toBe(true);
+  });
+
+  it("maps Electric / Unleaded to plugin-hybrid", () => {
+    expect(mapFuel("Electric / Unleaded")).toBe("plugin-hybrid");
+    expect(mapFuel("Hybrid")).toBe("hybrid");
+  });
+});
+
+describe("applyLocation", () => {
+  it("does not send zip and lat/lng together", () => {
+    const withGps = new URLSearchParams();
+    applyLocation(withGps, TAMPA, { lat: 27.95, lng: -82.46 });
+    expect(withGps.has("zip")).toBe(false);
+    expect(withGps.get("latitude")).toBe("27.95");
+    const withZip = new URLSearchParams();
+    applyLocation(withZip, TAMPA, null);
+    expect(withZip.get("zip")).toBe(TAMPA.zip);
+    expect(withZip.has("latitude")).toBe(false);
   });
 });
 

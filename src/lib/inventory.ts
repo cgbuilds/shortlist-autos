@@ -79,9 +79,9 @@ export function mapDrivetrain(raw?: string): Drivetrain {
   return "fwd";
 }
 
-function mapFuel(raw?: string): Fuel {
+export function mapFuel(raw?: string): Fuel {
   const v = (raw || "").toLowerCase();
-  if (v.includes("plug")) return "plugin-hybrid";
+  if (v.includes("plug") || (v.includes("electric") && v.includes("unleaded"))) return "plugin-hybrid";
   if (v.includes("hybrid")) return "hybrid";
   if (v.includes("electric") || v === "ev") return "ev";
   return "gas";
@@ -132,6 +132,7 @@ export function mapLiveListing(row: MarketcheckListing): Vehicle | null {
     listingUrl: row.vdp_url,
     photo,
     featuresUnknown: true,
+    drivetrainUnknown: !row.build?.drivetrain,
   };
 }
 
@@ -153,65 +154,137 @@ function providerMessage(status: number, body: string): string {
   return snippet ? `MarketCheck error ${status}: ${snippet}` : `MarketCheck error HTTP ${status}.`;
 }
 
-async function fetchLive(origin: GeoPoint, matrix: MustHaveMatrix, mode: SearchMode): Promise<LiveFetch> {
+export function applyLocation(
+  params: URLSearchParams,
+  origin: GeoPoint,
+  here?: { lat: number; lng: number } | null,
+): void {
+  params.set("radius", "100");
+  // MarketCheck is zip+radius OR lat/lng+radius. Sending both often returns 0 rows.
+  if (here) {
+    params.set("latitude", String(here.lat));
+    params.set("longitude", String(here.lng));
+    return;
+  }
+  params.set("zip", origin.zip);
+}
+
+function baseParams(key: string, origin: GeoPoint, here?: { lat: number; lng: number } | null): URLSearchParams {
+  const params = new URLSearchParams({
+    api_key: key,
+    car_type: "used",
+    country: "us",
+    rows: "50",
+    start: "0",
+  });
+  applyLocation(params, origin, here);
+  return params;
+}
+
+async function requestLive(url: string, signal: AbortSignal): Promise<LiveFetch> {
+  const res = await fetch(url, { signal, cache: "no-store" });
+  const text = await res.text();
+  if (!res.ok) {
+    return { listings: [], rawCount: 0, status: res.status, notice: { level: "error", message: providerMessage(res.status, text) } };
+  }
+  let data: { listings?: MarketcheckListing[]; num_found?: number } = {};
+  try {
+    data = JSON.parse(text) as typeof data;
+  } catch {
+    return { listings: [], rawCount: 0, status: res.status, notice: { level: "error", message: "MarketCheck returned a non-JSON body." } };
+  }
+  const raw = data.listings || [];
+  const listings = raw.map(mapLiveListing).filter((row): row is Vehicle => Boolean(row));
+  if (!raw.length) {
+    return {
+      listings: [],
+      rawCount: data.num_found ?? 0,
+      status: res.status,
+    };
+  }
+  if (!listings.length) {
+    return {
+      listings: [],
+      rawCount: raw.length,
+      status: res.status,
+      notice: {
+        level: "error",
+        message: `MarketCheck returned ${raw.length} cars but none had enough data to list (year/make/model/price).`,
+      },
+    };
+  }
+  return { listings, rawCount: raw.length, status: res.status };
+}
+
+async function fetchLive(
+  origin: GeoPoint,
+  matrix: MustHaveMatrix,
+  mode: SearchMode,
+  here?: { lat: number; lng: number } | null,
+): Promise<LiveFetch> {
   const key = process.env.MARKETCHECK_API_KEY?.trim();
   if (!key) {
     if (mode === "browse") return { listings: [], rawCount: 0 };
     return { listings: [], rawCount: 0, notice: { level: "error", message: "No MARKETCHECK_API_KEY on the server. Add it on Vercel and redeploy." } };
   }
-  const params = new URLSearchParams({
-    api_key: key,
-    zip: origin.zip,
-    latitude: String(origin.lat),
-    longitude: String(origin.lng),
-    radius: String(Math.max(SEARCH_RADIUS_MILES, 50)),
-    car_type: "used",
-    country: "us",
-    rows: "25",
-    start: "0",
-  });
-  if (mode === "grade") {
-    if (matrix.maxPrice) params.set("price_range", `1-${matrix.maxPrice}`);
-    if (matrix.maxMiles) params.set("miles_range", `0-${matrix.maxMiles}`);
-    if (matrix.minYear) params.set("year_range", `${matrix.minYear}-${new Date().getFullYear() + 1}`);
-    const body = marketcheckBody(matrix.body);
-    if (body) params.set("body_type", body);
-    // MarketCheck’s drivetrain enum is FWD/RWD/4WD — sending AWD can 400 the whole search.
-  }
-  const url = `https://api.marketcheck.com/v2/search/car/active?${params.toString()}`;
+  const yearMax = Math.max(matrix.minYear ?? new Date().getFullYear(), new Date().getFullYear());
+  const attempts: Array<{ label: string; apply: (params: URLSearchParams) => void }> =
+    mode === "grade"
+      ? [
+          {
+            label: "filters",
+            apply: (params) => {
+              if (matrix.maxPrice) params.set("price_range", `1-${matrix.maxPrice}`);
+              if (matrix.maxMiles) params.set("miles_range", `0-${matrix.maxMiles}`);
+              if (matrix.minYear) params.set("year_range", `${matrix.minYear}-${yearMax}`);
+              const body = marketcheckBody(matrix.body);
+              if (body) params.set("body_type", body);
+            },
+          },
+          {
+            label: "year-price",
+            apply: (params) => {
+              if (matrix.maxPrice) params.set("price_range", `1-${matrix.maxPrice}`);
+              if (matrix.minYear) params.set("year_range", `${matrix.minYear}-${yearMax}`);
+            },
+          },
+          {
+            label: "nearby-used",
+            apply: () => undefined,
+          },
+        ]
+      : [{ label: "nearby-used", apply: () => undefined }];
+
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
+  const timer = setTimeout(() => controller.abort(), 20000);
   try {
-    const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
-    const text = await res.text();
-    if (!res.ok) {
-      return { listings: [], rawCount: 0, status: res.status, notice: { level: "error", message: providerMessage(res.status, text) } };
+    let last: LiveFetch = { listings: [], rawCount: 0 };
+    let widened = false;
+    for (const attempt of attempts) {
+      const params = baseParams(key, origin, here ?? null);
+      attempt.apply(params);
+      last = await requestLive(`https://api.marketcheck.com/v2/search/car/active?${params.toString()}`, controller.signal);
+      if (last.status && last.status >= 400) return last;
+      if (last.listings.length) {
+        if (widened) {
+          last.notice = {
+            level: "warning",
+            message: "MarketCheck had 0 cars for the exact filters, so this is a wider used-car pull nearby, then graded locally (AWD and plug-in/hybrid are applied here, not in the feed query).",
+          };
+        }
+        return last;
+      }
+      widened = true;
     }
-    let data: { listings?: MarketcheckListing[]; num_found?: number } = {};
-    try {
-      data = JSON.parse(text) as typeof data;
-    } catch {
-      return { listings: [], rawCount: 0, status: res.status, notice: { level: "error", message: "MarketCheck returned a non-JSON body." } };
-    }
-    const raw = data.listings || [];
-    const listings = raw.map(mapLiveListing).filter((row): row is Vehicle => Boolean(row));
-    if (!raw.length) {
-      return {
-        listings: [],
-        rawCount: data.num_found ?? 0,
-        status: res.status,
-        notice: { level: "warning", message: "MarketCheck found 0 used cars for that search near this location." },
-      };
-    }
-    if (!listings.length) {
-      return {
-        listings: [],
-        rawCount: raw.length,
-        status: res.status,
-        notice: { level: "error", message: `MarketCheck returned ${raw.length} cars but none had enough data to list (year/make/model/price).` },
-      };
-    }
-    return { listings, rawCount: raw.length, status: res.status };
+    return {
+      listings: [],
+      rawCount: last.rawCount,
+      status: last.status,
+      notice: {
+        level: "warning",
+        message: `MarketCheck found 0 used cars near ${origin.label} even after widening the query.`,
+      },
+    };
   } catch (err) {
     const timedOut = err instanceof Error && err.name === "AbortError";
     return {
@@ -234,13 +307,26 @@ function sampleNear(origin: GeoPoint): Vehicle[] {
 
 export async function loadInventory(query: InventoryQuery): Promise<InventoryResult> {
   const origin = query.here ? originFromCoords(query.here) : resolveArea(query.matrix.searchArea);
-  const live = await fetchLive(origin, query.matrix, query.mode);
+  const live = await fetchLive(origin, query.matrix, query.mode, query.here);
   if (live.listings.length) {
     return { listings: live.listings, source: "live", origin, scanned: live.listings.length, notice: live.notice };
   }
+  if (query.mode === "grade") {
+    return {
+      listings: [],
+      source: "live",
+      origin,
+      scanned: 0,
+      notice: {
+        level: live.notice?.level === "error" ? "error" : "warning",
+        message:
+          live.notice?.message ||
+          `MarketCheck found 0 used cars near ${origin.label}. The Tampa sample set doesn’t cover this search, so nothing was substituted.`,
+      },
+    };
+  }
   const sample = sampleNear(origin);
-  const fallback =
-    live.notice?.message || "Live inventory was empty, so this used the Tampa sample set.";
+  const fallback = live.notice?.message || "Live inventory was empty, so this used the Tampa sample set.";
   return {
     listings: sample,
     source: "sample",
