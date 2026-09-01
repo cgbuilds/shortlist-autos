@@ -42,21 +42,19 @@ export function Gallery({
   selectedId,
   onSelect,
   graded = true,
+  emptyMessage,
 }: {
   rows: RankedRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   graded?: boolean;
+  emptyMessage: string;
 }) {
   const [lightboxId, setLightboxId] = useState<string | null>(null);
   const lightbox = rows.find((row) => row.listing.id === lightboxId)?.listing ?? null;
 
   if (!rows.length) {
-    return (
-      <p className="p-6 text-sm text-[var(--muted)]">
-        {graded ? "Nothing matched those must-haves. Adjust them in Chat and confirm to search again." : "No cars near this location yet. Set must-haves in Chat."}
-      </p>
-    );
+    return <p className="p-6 text-sm text-[var(--muted)]">{emptyMessage}</p>;
   }
 
   return (
