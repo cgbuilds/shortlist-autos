@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #f4efe6;
+  --paper-2: #fffdf8;
+  --ink: #1c1915;
+  --muted: #6b645a;
+  --line: #ddd4c6;
+  --accent: #2f5d50;
+  --background: var(--paper);
+  --foreground: var(--ink);
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.leaflet-container {
+  z-index: 0;
+  background: #e8e2d6;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  font: 12px/1.5 system-ui, sans-serif;
+}
+
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+  display: none;
+}
+
+@keyframes chat-bounce {
+  0%,
+  to {
+    transform: translateY(0);
+  }
+  18% {
+    transform: translateY(-18px);
+  }
+  32% {
+    transform: translateY(0);
+  }
+  46% {
+    transform: translateY(-8px);
+  }
+  62% {
+    transform: translateY(0);
+  }
+}
+
+.chat-bounce {
+  animation: chat-bounce 1.6s ease-in-out 0.4s 3;
+}
+
+@keyframes chat-composer-pulse {
+  0%,
+  to {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 18%, transparent);
+  }
+}
+
+.chat-composer-pulse {
+  animation: chat-composer-pulse 1.4s ease-in-out infinite;
+}
