@@ -25,6 +25,8 @@ npm test
 npm run build
 ```
 
+Live inventory uses `MARKETCHECK_API_KEY` (the MarketCheck **API Key**, not the client secret). Copy `.env.example` to `.env.local` and run `npm run check:marketcheck` to confirm the key works. That command prints status and a sample heading; it never prints the full key.
+
 ## Notes
 
 The GitHub repo was empty except a stub README. The previous agent session’s handoff file was never pushed. Product behavior was reverse-engineered from the public Vercel deployment. See `AGENTS.md`.
