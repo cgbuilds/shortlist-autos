@@ -64,11 +64,11 @@ export function Gallery({
             <article
               key={row.listing.id}
               onClick={() => onSelect(row.listing.id)}
-              className={`overflow-hidden rounded-2xl border bg-[var(--paper-2)] shadow-sm ${selected ? "border-[var(--accent)] ring-2 ring-[var(--accent)]" : "border-[var(--line)]"}`}
+              className={`flex flex-col overflow-hidden rounded-2xl border bg-[var(--paper-2)] shadow-sm md:flex-row md:items-start ${selected ? "border-[var(--accent)] ring-2 ring-[var(--accent)]" : "border-[var(--line)]"}`}
             >
               <button
                 type="button"
-                className="relative block w-full overflow-hidden bg-[var(--paper)]"
+                className="relative block w-full shrink-0 overflow-hidden bg-[var(--paper)] md:w-56 lg:w-64"
                 onClick={(e) => {
                   e.stopPropagation();
                   setLightboxId(row.listing.id);
@@ -79,13 +79,13 @@ export function Gallery({
                 <img
                   src={vehiclePhoto(row.listing)}
                   alt=""
-                  className="h-28 w-full object-cover sm:h-36 md:h-40"
+                  className="h-28 w-full object-cover object-center md:aspect-[4/3] md:h-auto"
                 />
                 <span className="absolute right-2 top-2 rounded-full bg-[var(--ink)] px-2.5 py-1 text-xs text-[var(--paper)]">
                   {caption.score} {caption.word}
                 </span>
               </button>
-              <div className="p-4">
+              <div className="min-w-0 flex-1 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-[family-name:var(--font-display)] text-lg leading-tight">{vehicleTitle(row.listing)}</p>

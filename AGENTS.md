@@ -15,7 +15,7 @@ This branch is a **source reconstruction** of that autos demo (routes, sample in
 
 ## Product
 
-Chat-first used-car shortlist. Default layout is **Gallery**: scoring copy + Cars.com / Autotrader / Search links, with a compact photo preview that opens full-size. **Split view** is the map + ranked list. Toggle is always available and saved in `localStorage` (`shortlist-autos-layout-v1`). Sample **Tampa-area** listings are filtered/scored. Copy link shares a deflate-raw token in `/s#s1.…`.
+Chat-first used-car shortlist. Default layout is **Gallery**: scoring copy + Cars.com / Autotrader / Search links. Photos stay a compact strip on mobile; on desktop they sit as a 4:3 thumbnail beside the copy (not a full-width banner). Tap a photo to open it full-size. **Split view** is the map + ranked list. Toggle is always available and saved in `localStorage` (`shortlist-autos-layout-v1`). Sample **Tampa-area** listings are filtered/scored. Copy link shares a deflate-raw token in `/s#s1.…`.
 
 Car photos live in `public/cars/{listing-id}.jpg` (Wikimedia Commons, used as demo listing photos).
 
