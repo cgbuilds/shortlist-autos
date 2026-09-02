@@ -249,6 +249,17 @@ async function requestLive(url: string, signal: AbortSignal): Promise<LiveFetch>
   return { listings, rawCount: raw.length, status: res.status };
 }
 
+function mergeVehicles(primary: Vehicle[], extra: Vehicle[]): Vehicle[] {
+  const seen = new Set(primary.map((row) => row.id));
+  const out = [...primary];
+  for (const row of extra) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push(row);
+  }
+  return out;
+}
+
 async function fetchLive(
   origin: GeoPoint,
   matrix: MustHaveMatrix,
@@ -325,6 +336,19 @@ async function fetchLive(
       attempt.apply(params);
       last = await requestLive(`https://api.marketcheck.com/v2/search/car/active?${params.toString()}`, controller.signal);
       if (last.status && last.status >= 400) return last;
+      const prefer = mode === "grade" && matrix.preferFuel && !matrix.fuel ? marketcheckPowertrain(matrix.preferFuel) : null;
+      if (prefer && !params.get("powertrain_type")) {
+        const extraParams = new URLSearchParams(params);
+        extraParams.set("powertrain_type", prefer);
+        const extra = await requestLive(`https://api.marketcheck.com/v2/search/car/active?${extraParams.toString()}`, controller.signal);
+        if (!extra.status || extra.status < 400) {
+          last = {
+            ...last,
+            listings: mergeVehicles(last.listings, extra.listings),
+            rawCount: Math.max(last.rawCount, extra.rawCount),
+          };
+        }
+      }
       if (last.listings.length) {
         const localHits = mode === "browse" ? last.listings.length : searchVehicles(last.listings, matrix).results.length;
         if (localHits) {
