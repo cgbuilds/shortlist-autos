@@ -8,7 +8,7 @@ Sister product: homes at [shortlist.casa](https://shortlist.casa).
 
 - Demo sign-in (`Continue in demo mode`)
 - Chat sets a must-have matrix (area, body, budget, miles, year, AWD, seats, CarPlay, tow, fuel)
-- Sample Tampa-area listings scored in a photo **Gallery** (default) or map **Split view**
+- First look is a nearby shortlist of cars from the last 3 years, ≤ $45k, ≤ 70k miles, then scored in a photo **Gallery** (default) or map **Split view**
 - Copy a compressed share link (`/s#s1.…`)
 
 ## Run locally

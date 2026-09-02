@@ -46,8 +46,13 @@ describe("searchVehicles", () => {
     expect(searchVehicles([live], matrix).results).toHaveLength(1);
   });
 
-  it("browse matrix keeps the full nearby sample list", () => {
+  it("browse impression matrix keeps recent low-mile sample cars only", () => {
     const { results } = searchVehicles(SAMPLE_VEHICLES, BROWSE_MATRIX);
-    expect(results).toHaveLength(16);
+    const ids = results.map((row) => row.listing.id);
+    expect(ids).toContain("civic-24-tampa");
+    expect(ids).toContain("tucson-hyb-23-tampa");
+    expect(ids).not.toContain("equinox-17-valrico");
+    expect(ids).not.toContain("outback-18-brandon");
+    expect(results[0].listing.id).toBe("civic-24-tampa");
   });
 });

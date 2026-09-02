@@ -169,6 +169,24 @@ export function applyLocation(
   params.set("zip", origin.zip);
 }
 
+function applyRangeFilters(params: URLSearchParams, matrix: MustHaveMatrix): void {
+  const yearMax = Math.max(matrix.minYear ?? new Date().getFullYear(), new Date().getFullYear());
+  if (matrix.maxPrice) params.set("price_range", `1-${matrix.maxPrice}`);
+  if (matrix.maxMiles) params.set("miles_range", `0-${matrix.maxMiles}`);
+  if (matrix.minYear) params.set("year_range", `${matrix.minYear}-${yearMax}`);
+  const body = marketcheckBody(matrix.body);
+  if (body) params.set("body_type", body);
+}
+
+function preferMintListings(params: URLSearchParams, photos: boolean, cleanTitle: boolean): void {
+  params.set("has_price", "true");
+  params.set("has_miles", "true");
+  params.set("sort_by", "miles");
+  params.set("sort_order", "asc");
+  if (photos) params.set("photo_links", "true");
+  if (cleanTitle) params.set("carfax_clean_title", "true");
+}
+
 function baseParams(key: string, origin: GeoPoint, here?: { lat: number; lng: number } | null): URLSearchParams {
   const params = new URLSearchParams({
     api_key: key,
@@ -234,11 +252,7 @@ async function fetchLive(
           {
             label: "filters",
             apply: (params) => {
-              if (matrix.maxPrice) params.set("price_range", `1-${matrix.maxPrice}`);
-              if (matrix.maxMiles) params.set("miles_range", `0-${matrix.maxMiles}`);
-              if (matrix.minYear) params.set("year_range", `${matrix.minYear}-${yearMax}`);
-              const body = marketcheckBody(matrix.body);
-              if (body) params.set("body_type", body);
+              applyRangeFilters(params, matrix);
             },
           },
           {
@@ -253,7 +267,29 @@ async function fetchLive(
             apply: () => undefined,
           },
         ]
-      : [{ label: "nearby-used", apply: () => undefined }];
+      : [
+          {
+            label: "mint",
+            apply: (params) => {
+              applyRangeFilters(params, matrix);
+              preferMintListings(params, true, true);
+            },
+          },
+          {
+            label: "photos",
+            apply: (params) => {
+              applyRangeFilters(params, matrix);
+              preferMintListings(params, true, false);
+            },
+          },
+          {
+            label: "filters",
+            apply: (params) => {
+              applyRangeFilters(params, matrix);
+              preferMintListings(params, false, false);
+            },
+          },
+        ];
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);

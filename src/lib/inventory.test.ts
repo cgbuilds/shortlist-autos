@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadInventory, mapBody, mapDrivetrain, mapFuel, mapLiveListing, applyLocation } from "./inventory";
 import { originFromCoords, TAMPA } from "./location";
-import { BROWSE_MATRIX } from "./types";
+import { BROWSE_MATRIX, browseMinYear } from "./types";
 
 describe("originFromCoords", () => {
   it("uses Tampa when there is no location", () => {
@@ -60,9 +60,26 @@ describe("applyLocation", () => {
 
 describe("loadInventory", () => {
   it("returns the sample Tampa set when no live key is set", async () => {
-    const result = await loadInventory({ matrix: BROWSE_MATRIX, mode: "browse", here: TAMPA });
-    expect(result.source).toBe("sample");
-    expect(result.listings.length).toBeGreaterThan(5);
-    expect(result.origin.label).toBe("Tampa, FL");
+    const prev = process.env.MARKETCHECK_API_KEY;
+    delete process.env.MARKETCHECK_API_KEY;
+    try {
+      const result = await loadInventory({ matrix: BROWSE_MATRIX, mode: "browse", here: TAMPA });
+      expect(result.source).toBe("sample");
+      expect(result.listings.length).toBeGreaterThan(5);
+      expect(result.origin.label).toBe("Tampa, FL");
+    } finally {
+      if (prev === undefined) delete process.env.MARKETCHECK_API_KEY;
+      else process.env.MARKETCHECK_API_KEY = prev;
+    }
+  });
+});
+
+describe("browse impression defaults", () => {
+  it("uses the last three model years under $45k and 70k miles", () => {
+    expect(browseMinYear(new Date("2026-09-02T00:00:00Z"))).toBe(2023);
+    expect(BROWSE_MATRIX.maxPrice).toBe(45000);
+    expect(BROWSE_MATRIX.maxMiles).toBe(70000);
+    expect(BROWSE_MATRIX.minYear).toBe(browseMinYear());
+    expect(BROWSE_MATRIX.body).toBeNull();
   });
 });

@@ -8,7 +8,7 @@ import { formatMustHaves } from "@/lib/chat";
 import { formatVehicleLine, gradeCaption, outboundLinks, readPhoneLocation, resultsHeadline, vehiclePhoto, vehicleTitle } from "@/lib/format";
 import { encodeShare, readLayoutMode, readStoredSession, shareUrlFromToken, writeLayoutMode, writeStoredSession } from "@/lib/session";
 import type { LayoutMode, MustHaveMatrix, RankedRow, SearchMode, Vehicle } from "@/lib/types";
-import { BROWSE_MATRIX } from "@/lib/types";
+import { browseMatrix } from "@/lib/types";
 
 const Map = dynamic(() => import("@/components/ResultsMap").then((m) => m.ResultsMap), {
   ssr: false,
@@ -321,7 +321,7 @@ function ListingCard({ listing, grade, graded = true }: RankedRow & { graded?: b
 }
 
 export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix }) {
-  const [matrix, setMatrix] = useState<MustHaveMatrix>(initialMatrix ?? BROWSE_MATRIX);
+  const [matrix, setMatrix] = useState<MustHaveMatrix>(initialMatrix ?? browseMatrix());
   const [rows, setRows] = useState<RankedRow[]>([]);
   const [matched, setMatched] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -431,7 +431,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
         });
         return;
       }
-      const start = { ...BROWSE_MATRIX };
+      const start = browseMatrix();
       setMatrix(start);
       await runSearch(start, "browse", { listings: stored.listings, loc, ownList: stored.hasOwnList });
     })();
@@ -456,7 +456,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
     ? "Searching…"
     : graded
       ? resultsHeadline(rows.length, matched)
-      : `Nearby in ${matrix.searchArea}`;
+      : `Newer cars nearby in ${matrix.searchArea}`;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -469,7 +469,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
         </div>
       ) : (
         <p className="hidden shrink-0 border-b border-[var(--line)] px-3 py-2 text-sm md:block">
-          Photos first. Nearby cars load first
+          Photos first. We open on newer cars under $45k with under 70k miles near you
           {source === "live" ? " from live listings" : source === "sample" ? " from the Tampa sample set" : ""}. Confirm must-haves in{" "}
           <button type="button" className="font-medium underline" onClick={openChat}>
             Chat
