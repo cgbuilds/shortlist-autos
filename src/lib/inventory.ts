@@ -1,5 +1,6 @@
 import { SAMPLE_VEHICLES } from "@/data/vehicles";
 import { haversineMiles, originFromCoords, resolveArea, TAMPA, type GeoPoint } from "@/lib/location";
+import { searchVehicles } from "@/lib/grade";
 import type { BodyStyle, Drivetrain, Fuel, MustHaveMatrix, SearchMode, Vehicle } from "@/lib/types";
 import { SEARCH_RADIUS_MILES } from "@/lib/types";
 
@@ -47,6 +48,7 @@ type MarketcheckListing = {
     vehicle_type?: string;
     drivetrain?: string;
     fuel_type?: string;
+    powertrain_type?: string;
     std_seating?: string;
     city_mpg?: number;
     highway_mpg?: number;
@@ -79,7 +81,11 @@ export function mapDrivetrain(raw?: string): Drivetrain {
   return "fwd";
 }
 
-export function mapFuel(raw?: string): Fuel {
+export function mapFuel(raw?: string, powertrain?: string): Fuel {
+  const p = (powertrain || "").toLowerCase();
+  if (p === "phev") return "plugin-hybrid";
+  if (p === "hev" || p === "mhev") return "hybrid";
+  if (p === "bev") return "ev";
   const v = (raw || "").toLowerCase();
   if (v.includes("plug") || (v.includes("electric") && v.includes("unleaded"))) return "plugin-hybrid";
   if (v.includes("hybrid")) return "hybrid";
@@ -125,7 +131,7 @@ export function mapLiveListing(row: MarketcheckListing): Vehicle | null {
     drivetrain: mapDrivetrain(row.build?.drivetrain),
     seats: Number.isFinite(seats) && seats > 0 ? seats : 5,
     mpg: row.build?.highway_mpg ?? row.build?.city_mpg ?? null,
-    fuel: mapFuel(row.build?.fuel_type),
+    fuel: mapFuel(row.build?.fuel_type, row.build?.powertrain_type),
     carplay: true,
     backupCamera: true,
     tow: mapBody(row.build?.body_type) === "truck",
@@ -144,6 +150,13 @@ function marketcheckBody(body: MustHaveMatrix["body"]): string | null {
   if (body === "hatchback") return "Hatchback";
   if (body === "coupe") return "Coupe";
   if (body === "wagon") return "Wagon";
+  return null;
+}
+
+export function marketcheckPowertrain(fuel: MustHaveMatrix["fuel"]): string | null {
+  if (fuel === "plugin-hybrid") return "PHEV";
+  if (fuel === "hybrid") return "HEV,PHEV";
+  if (fuel === "ev") return "BEV";
   return null;
 }
 
@@ -169,13 +182,15 @@ export function applyLocation(
   params.set("zip", origin.zip);
 }
 
-function applyRangeFilters(params: URLSearchParams, matrix: MustHaveMatrix): void {
+export function applyRangeFilters(params: URLSearchParams, matrix: MustHaveMatrix): void {
   const yearMax = Math.max(matrix.minYear ?? new Date().getFullYear(), new Date().getFullYear());
   if (matrix.maxPrice) params.set("price_range", `1-${matrix.maxPrice}`);
   if (matrix.maxMiles) params.set("miles_range", `0-${matrix.maxMiles}`);
   if (matrix.minYear) params.set("year_range", `${matrix.minYear}-${yearMax}`);
   const body = marketcheckBody(matrix.body);
   if (body) params.set("body_type", body);
+  const powertrain = marketcheckPowertrain(matrix.fuel);
+  if (powertrain) params.set("powertrain_type", powertrain);
 }
 
 function preferMintListings(params: URLSearchParams, photos: boolean, cleanTitle: boolean): void {
@@ -256,6 +271,15 @@ async function fetchLive(
             },
           },
           {
+            label: "fuel-year-price",
+            apply: (params) => {
+              if (matrix.maxPrice) params.set("price_range", `1-${matrix.maxPrice}`);
+              if (matrix.minYear) params.set("year_range", `${matrix.minYear}-${yearMax}`);
+              const powertrain = marketcheckPowertrain(matrix.fuel);
+              if (powertrain) params.set("powertrain_type", powertrain);
+            },
+          },
+          {
             label: "year-price",
             apply: (params) => {
               if (matrix.maxPrice) params.set("price_range", `1-${matrix.maxPrice}`);
@@ -302,23 +326,29 @@ async function fetchLive(
       last = await requestLive(`https://api.marketcheck.com/v2/search/car/active?${params.toString()}`, controller.signal);
       if (last.status && last.status >= 400) return last;
       if (last.listings.length) {
-        if (widened) {
-          last.notice = {
-            level: "warning",
-            message: "MarketCheck had 0 cars for the exact filters, so this is a wider used-car pull nearby, then graded locally (AWD and plug-in/hybrid are applied here, not in the feed query).",
-          };
+        const localHits = mode === "browse" ? last.listings.length : searchVehicles(last.listings, matrix).results.length;
+        if (localHits) {
+          if (widened) {
+            last.notice = {
+              level: "warning",
+              message:
+                "MarketCheck had 0 cars for the exact filters, so this is a wider used-car pull nearby, then graded locally (AWD is applied here; plug-in/hybrid is requested from the feed when we can).",
+            };
+          }
+          return last;
         }
-        return last;
       }
       widened = true;
     }
     return {
-      listings: [],
+      listings: last.listings,
       rawCount: last.rawCount,
       status: last.status,
       notice: {
         level: "warning",
-        message: `MarketCheck found 0 used cars near ${origin.label} even after widening the query.`,
+        message: last.listings.length
+          ? `MarketCheck returned cars near ${origin.label}, but none on those pages met every must-have.`
+          : `MarketCheck found 0 used cars near ${origin.label} even after widening the query.`,
       },
     };
   } catch (err) {

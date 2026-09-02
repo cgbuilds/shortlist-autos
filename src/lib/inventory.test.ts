@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadInventory, mapBody, mapDrivetrain, mapFuel, mapLiveListing, applyLocation } from "./inventory";
+import { loadInventory, mapBody, mapDrivetrain, mapFuel, mapLiveListing, applyLocation, applyRangeFilters, marketcheckPowertrain } from "./inventory";
 import { originFromCoords, TAMPA } from "./location";
 import { BROWSE_MATRIX, browseMinYear } from "./types";
 
@@ -41,6 +41,8 @@ describe("mapLiveListing", () => {
 
   it("maps Electric / Unleaded to plugin-hybrid", () => {
     expect(mapFuel("Electric / Unleaded")).toBe("plugin-hybrid");
+    expect(mapFuel("Electric / Premium Unleaded")).toBe("plugin-hybrid");
+    expect(mapFuel("Unleaded", "PHEV")).toBe("plugin-hybrid");
     expect(mapFuel("Hybrid")).toBe("hybrid");
   });
 });
@@ -81,5 +83,22 @@ describe("browse impression defaults", () => {
     expect(BROWSE_MATRIX.maxMiles).toBe(70000);
     expect(BROWSE_MATRIX.minYear).toBe(browseMinYear());
     expect(BROWSE_MATRIX.body).toBeNull();
+  });
+});
+
+describe("MarketCheck powertrain filters", () => {
+  it("asks for PHEV when the must-have is plug-in hybrid", () => {
+    expect(marketcheckPowertrain("plugin-hybrid")).toBe("PHEV");
+    expect(marketcheckPowertrain("hybrid")).toBe("HEV,PHEV");
+    expect(marketcheckPowertrain("ev")).toBe("BEV");
+    const params = new URLSearchParams();
+    applyRangeFilters(params, {
+      ...BROWSE_MATRIX,
+      body: "suv",
+      fuel: "plugin-hybrid",
+    });
+    expect(params.get("body_type")).toBe("SUV");
+    expect(params.get("powertrain_type")).toBe("PHEV");
+    expect(params.get("price_range")).toBe("1-45000");
   });
 });
