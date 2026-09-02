@@ -108,5 +108,5 @@ export const DEFAULT_MATRIX: MustHaveMatrix = {
 };
 
 export const SEARCH_RADIUS_MILES = 20;
-export const SESSION_KEY = "shortlist-autos-session-v1";
+export const SESSION_KEY = "shortlist-autos-session-v2";
 export const DEMO_COOKIE = "sa_demo";

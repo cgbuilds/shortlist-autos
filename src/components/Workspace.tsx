@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Gallery } from "@/components/Gallery";
 import { ViewToggle } from "@/components/ViewToggle";
 import { formatMustHaves } from "@/lib/chat";
+import { hasMustHaves, isImpressionMatrix } from "@/lib/grade";
 import { formatVehicleLine, gradeCaption, outboundLinks, readPhoneLocation, resultsHeadline, vehiclePhoto, vehicleTitle } from "@/lib/format";
 import { encodeShare, readLayoutMode, readStoredSession, shareUrlFromToken, writeLayoutMode, writeStoredSession } from "@/lib/session";
 import type { LayoutMode, MustHaveMatrix, RankedRow, SearchMode, Vehicle } from "@/lib/types";
@@ -420,7 +421,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
     void (async () => {
       const loc = await readPhoneLocation();
       if (loc) setHere(loc);
-      if (stored.confirmed && stored.matrix) {
+      if (stored.confirmed && stored.matrix && hasMustHaves(stored.matrix) && !isImpressionMatrix(stored.matrix)) {
         setMatrix(stored.matrix);
         setConfirmed(true);
         setInvite(false);
@@ -433,7 +434,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
       }
       const start = browseMatrix();
       setMatrix(start);
-      await runSearch(start, "browse", { listings: stored.listings, loc, ownList: stored.hasOwnList });
+      await runSearch(start, "browse", { loc, ownList: false });
     })();
     const html = document.documentElement;
     const body = document.body;

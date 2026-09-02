@@ -51,7 +51,7 @@ Outbound listing links: Cars.com (zip+keyword), Autotrader (zip+make), Google se
 
 ## Stack
 
-Next.js App Router, Tailwind, Fraunces + Source Sans 3, Leaflet (`tile.openstreetmap.de`, Esri fallback), localStorage key `shortlist-autos-session-v1`.
+Next.js App Router, Tailwind, Fraunces + Source Sans 3, Leaflet (`tile.openstreetmap.de`, Esri fallback), localStorage key `shortlist-autos-session-v2`.
 
 Share payload: `{v:1, matrix, listings: first 10}` compressed with `CompressionStream("deflate-raw")`, base64url, prefixed `s1.`.
 
