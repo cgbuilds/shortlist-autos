@@ -35,7 +35,7 @@ describe("sanitizeMatrix", () => {
     expect(next.maxPrice).toBe(30000);
     expect(next.awd).toBe(true);
     expect(next.searchArea).toBe("Tampa, FL");
-    expect(next.maxMiles).toBeNull();
+    expect(next.maxMiles).toBe(BROWSE_MATRIX.maxMiles);
   });
 
   it("ignores invalid body values", () => {

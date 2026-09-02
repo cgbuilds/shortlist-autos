@@ -64,20 +64,33 @@ export type RankedRow = {
 
 export type SearchMode = "browse" | "grade";
 
-/** Open the app on nearby inventory — no must-haves until the user confirms them. */
-export const BROWSE_MATRIX: MustHaveMatrix = {
-  searchArea: "Tampa, FL",
-  maxPrice: null,
-  maxMiles: null,
-  minYear: null,
-  body: null,
-  awd: false,
-  minSeats: 5,
-  carplay: false,
-  backupCamera: false,
-  tow: false,
-  fuel: null,
-};
+/** First-look shortlist: recent, priced, and low-mile in any city. */
+export const BROWSE_MAX_PRICE = 45000;
+export const BROWSE_MAX_MILES = 70000;
+export const BROWSE_MAX_AGE_YEARS = 3;
+
+export function browseMinYear(now = new Date()): number {
+  return now.getFullYear() - BROWSE_MAX_AGE_YEARS;
+}
+
+export function browseMatrix(searchArea = "Tampa, FL", now = new Date()): MustHaveMatrix {
+  return {
+    searchArea,
+    maxPrice: BROWSE_MAX_PRICE,
+    maxMiles: BROWSE_MAX_MILES,
+    minYear: browseMinYear(now),
+    body: null,
+    awd: false,
+    minSeats: 5,
+    carplay: false,
+    backupCamera: false,
+    tow: false,
+    fuel: null,
+  };
+}
+
+/** Open the app on a clean nearby shortlist until the user confirms their own must-haves. */
+export const BROWSE_MATRIX: MustHaveMatrix = browseMatrix();
 
 /** Example confirmed shortlist (tests / chat parser baseline). */
 export const DEFAULT_MATRIX: MustHaveMatrix = {
@@ -95,5 +108,5 @@ export const DEFAULT_MATRIX: MustHaveMatrix = {
 };
 
 export const SEARCH_RADIUS_MILES = 20;
-export const SESSION_KEY = "shortlist-autos-session-v1";
+export const SESSION_KEY = "shortlist-autos-session-v2";
 export const DEMO_COOKIE = "sa_demo";

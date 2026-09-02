@@ -21,11 +21,11 @@ Chat-first used-car shortlist. Default layout is **Gallery** (4:3 desktop thumbn
 
 **Chat:** `/api/chat` uses **OpenRouter** when `OPENROUTER_API_KEY` is set. Model comes from `OPENROUTER_MODEL` (default `openrouter/auto`). Confirm / “yes” still skip the model. If the key is missing or OpenRouter fails, the deterministic parser in `src/lib/chat.ts` is the fallback. LLM output is sanitized onto `MustHaveMatrix` before search.
 
-**Flow:** `/app` shows nearby cars first (geolocation, else Tampa). Chat bounces until must-haves are set. Chat reads preferences back; **Confirm & search** (or “yes”) then searches and grades. Copy link shares a deflate-raw token in `/s#s1.…`.
+**Flow:** `/app` shows a clean nearby shortlist first (geolocation, else Tampa): last 3 years, ≤ $45k, ≤ 70k miles. Chat bounces until must-haves are set. Chat reads preferences back; **Confirm & search** (or “yes”) then searches and grades. Copy link shares a deflate-raw token in `/s#s1.…`.
 
 Car photos live in `public/cars/{listing-id}.jpg` for sample rows (Wikimedia Commons). Live rows use the listing photo when the feed includes one.
 
-Default **browse** matrix is location-only (Tampa, FL). Must-haves are empty until confirmed.
+Default **browse** opens on a geo-local shortlist: model years from the last 3 years, **≤ $45k**, **≤ 70k miles**, photos when the live feed allows, lowest miles first. Chat still waits for the user to confirm their own must-haves.
 
 Demo identity shown in the header: `family@demo.local`. Cookie: `sa_demo=1` (httpOnly, 30 days).
 
@@ -51,7 +51,7 @@ Outbound listing links: Cars.com (zip+keyword), Autotrader (zip+make), Google se
 
 ## Stack
 
-Next.js App Router, Tailwind, Fraunces + Source Sans 3, Leaflet (`tile.openstreetmap.de`, Esri fallback), localStorage key `shortlist-autos-session-v1`.
+Next.js App Router, Tailwind, Fraunces + Source Sans 3, Leaflet (`tile.openstreetmap.de`, Esri fallback), localStorage key `shortlist-autos-session-v2`.
 
 Share payload: `{v:1, matrix, listings: first 10}` compressed with `CompressionStream("deflate-raw")`, base64url, prefixed `s1.`.
 

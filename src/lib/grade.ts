@@ -23,6 +23,22 @@ export function hasMustHaves(matrix: MustHaveMatrix): boolean {
   );
 }
 
+/** Default first-look filters only — not a user-confirmed shortlist. */
+export function isImpressionMatrix(matrix: MustHaveMatrix): boolean {
+  return (
+    !matrix.body &&
+    !matrix.awd &&
+    !matrix.carplay &&
+    !matrix.backupCamera &&
+    !matrix.tow &&
+    !matrix.fuel &&
+    matrix.minSeats <= 5 &&
+    matrix.maxPrice != null &&
+    matrix.maxMiles != null &&
+    matrix.minYear != null
+  );
+}
+
 function bodyMatches(listing: Vehicle, matrix: MustHaveMatrix): boolean {
   if (!matrix.body) return true;
   if (listing.body === matrix.body) return true;
@@ -66,8 +82,8 @@ function bandFor(total: number, failed: boolean): GradeBand {
 function whyText(listing: Vehicle, matrix: MustHaveMatrix, failed: boolean): string {
   const title = `${listing.year} ${listing.make} ${listing.model}${listing.trim ? ` ${listing.trim}` : ""}`;
   const facts = `${title} in ${listing.city} is listed at ${money(listing.price)} with ${listing.miles.toLocaleString()} miles.`;
-  if (!hasMustHaves(matrix)) {
-    return `Nearby listing. ${facts} Set must-haves in Chat to search and grade against what you actually need.`;
+  if (!hasMustHaves(matrix) || isImpressionMatrix(matrix)) {
+    return `A newer, lower-mile listing nearby. ${facts} Set must-haves in Chat to search and grade against what you actually need.`;
   }
   const lead = failed
     ? "This one misses something you called a must-have."
@@ -126,7 +142,13 @@ export function searchVehicles(listings: Vehicle[], matrix: MustHaveMatrix): { r
   const ranked = listings
     .map((listing) => ({ listing, grade: gradeListing(listing, matrix) }))
     .filter((row) => !row.grade.mustHaveFailed)
-    .sort((a, b) => b.grade.total - a.grade.total || a.listing.price - b.listing.price);
+    .sort(
+      (a, b) =>
+        b.grade.total - a.grade.total ||
+        a.listing.miles - b.listing.miles ||
+        b.listing.year - a.listing.year ||
+        a.listing.price - b.listing.price,
+    );
   return {
     results: ranked,
     listings,
