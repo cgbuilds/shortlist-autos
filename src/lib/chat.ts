@@ -80,7 +80,12 @@ export function formatMustHaves(matrix: MustHaveMatrix): string {
   if (matrix.backupCamera) parts.push("backup camera");
   if (matrix.tow) parts.push("tow");
   if (matrix.fuel) parts.push(matrix.fuel);
+  else if (matrix.preferFuel) parts.push(`prefers ${matrix.preferFuel}`);
   return parts.join(" · ") || "No must-haves yet";
+}
+
+function pluginIsSoft(text: string): boolean {
+  return /\b(ideally|if possible|prefer(?:ably)?|nice to have|not (?:a )?must|not strictly|not required)\b/i.test(text);
 }
 
 export function parseMustHaves(text: string, draft: MustHaveMatrix = DEFAULT_MATRIX): MustHaveMatrix {
@@ -94,7 +99,14 @@ export function parseMustHaves(text: string, draft: MustHaveMatrix = DEFAULT_MAT
   const year = parseYear(text);
   if (year) next.minYear = year;
   const fuel = parseFuel(text);
-  if (fuel) next.fuel = fuel;
+  if (fuel) {
+    if (fuel === "plugin-hybrid" && pluginIsSoft(text)) {
+      next.preferFuel = "plugin-hybrid";
+      next.fuel = null;
+    } else {
+      next.fuel = fuel;
+    }
+  }
   const area = parseArea(text);
   if (area) next.searchArea = area;
   if (/\bawd|4wd|all[- ]wheel|four[- ]wheel\b/i.test(text)) next.awd = true;
@@ -104,7 +116,7 @@ export function parseMustHaves(text: string, draft: MustHaveMatrix = DEFAULT_MAT
   if (/\btow(ing| package)?\b/i.test(text)) next.tow = true;
   const seats = text.match(/\b(\d)\+?\s*seats?\b/i);
   if (seats) next.minSeats = Number(seats[1]);
-  if (/\bthird row|3rd row\b/i.test(text)) next.minSeats = Math.max(next.minSeats, 7);
+  if (/\b(?:3rd|third|3|three)[-\s]?row\b/i.test(text)) next.minSeats = Math.max(next.minSeats, 7);
   return next;
 }
 
@@ -157,6 +169,8 @@ export function sanitizeMatrix(raw: unknown, draft: MustHaveMatrix): MustHaveMat
     backupCamera: src.backupCamera === undefined ? draft.backupCamera : asBool(src.backupCamera, draft.backupCamera),
     tow: src.tow === undefined ? draft.tow : asBool(src.tow, draft.tow),
     fuel: src.fuel === undefined ? draft.fuel : src.fuel === null ? null : (asFuel(src.fuel) ?? draft.fuel),
+    preferFuel:
+      src.preferFuel === undefined ? draft.preferFuel : src.preferFuel === null ? null : (asFuel(src.preferFuel) ?? draft.preferFuel),
   };
 }
 

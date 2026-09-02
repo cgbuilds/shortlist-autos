@@ -32,6 +32,7 @@ const MATRIX_SCHEMA = {
           "backupCamera",
           "tow",
           "fuel",
+          "preferFuel",
         ],
         properties: {
           searchArea: { type: "string" },
@@ -50,6 +51,9 @@ const MATRIX_SCHEMA = {
           backupCamera: { type: "boolean" },
           tow: { type: "boolean" },
           fuel: {
+            anyOf: [{ type: "string", enum: ["gas", "hybrid", "plugin-hybrid", "ev"] }, { type: "null" }],
+          },
+          preferFuel: {
             anyOf: [{ type: "string", enum: ["gas", "hybrid", "plugin-hybrid", "ev"] }, { type: "null" }],
           },
         },
@@ -73,7 +77,9 @@ Rules:
 - maxPrice and maxMiles are integers in USD / miles, or null. "30k" means 30000.
 - minYear is a 4-digit year or null. minSeats is 2-15.
 - awd, carplay, backupCamera, tow are booleans.
-- fuel is gas, hybrid, plugin-hybrid, ev, or null.
+- fuel is gas, hybrid, plugin-hybrid, ev, or null. Hard filter only if they required it.
+- preferFuel is the same enum or null. Use it when they say ideally / prefer / not strictly / not a must. Leave fuel null in that case.
+- "3 row" / third row means minSeats 7.
 - awaitingConfirm is true when you updated or restated must-haves and they have not confirmed yet.
 - rescore is true only if they clearly asked you to search/grade now (confirm, go, find them).
 - reply: 1-3 short sentences. Read the must-haves back. Ask them to confirm before search unless they already did.

@@ -48,6 +48,8 @@ export type MustHaveMatrix = {
   backupCamera: boolean;
   tow: boolean;
   fuel: Fuel | null;
+  /** Scored as a plus, not a hard filter — e.g. "plugin ideally, not strictly". */
+  preferFuel: Fuel | null;
 };
 
 export type Grade = {
@@ -86,6 +88,7 @@ export function browseMatrix(searchArea = "Tampa, FL", now = new Date()): MustHa
     backupCamera: false,
     tow: false,
     fuel: null,
+    preferFuel: null,
   };
 }
 
@@ -105,6 +108,7 @@ export const DEFAULT_MATRIX: MustHaveMatrix = {
   backupCamera: false,
   tow: false,
   fuel: null,
+  preferFuel: null,
 };
 
 export const SEARCH_RADIUS_MILES = 20;
