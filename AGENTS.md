@@ -45,7 +45,7 @@ Chat without `text` → `400 {"error":"Missing text"}`. Search/chat without demo
 
 ## Inventory
 
-`loadInventory` tries MarketCheck when `MARKETCHECK_API_KEY` is present (`GET https://api.marketcheck.com/v2/search/car/active`). Otherwise 16 sample vehicles in `src/data/vehicles.ts` (IDs like `rav4-21-tampa`, `cx5-20-lutz`). Search `source` is `"live"`, `"sample"`, or `"session"` (shared lists).
+`loadInventory` tries MarketCheck when `MARKETCHECK_API_KEY` is present (`GET https://api.marketcheck.com/v2/search/car/active`). Confirmed searches send `powertrain_type` (PHEV / HEV / BEV) with year/price/body, and keep widening if a page of listings grades to zero. Otherwise 16 sample vehicles in `src/data/vehicles.ts` (IDs like `rav4-21-tampa`, `cx5-20-lutz`). Search `source` is `"live"`, `"sample"`, or `"session"` (shared lists).
 
 Outbound listing links: Cars.com (zip+keyword), Autotrader (zip+make), Google search. Live rows prefer `listingUrl` from the feed.
 
