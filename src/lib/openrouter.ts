@@ -1,6 +1,8 @@
 import { chatReply, formatMustHaves, nextFollowUp, nextScoringPrompt, parseJsonObject, sanitizeMatrix, type ChatReply } from "@/lib/chat";
 import { hasMustHaves } from "@/lib/grade";
+import { applyRankedPicks, listingToRankRecord, parseRankedPicks, scoringSystemPrompt } from "@/lib/shortlistRank";
 import type { MustHaveMatrix, RankedRow } from "@/lib/types";
+import { SHORTLIST_KEEP_MAX, SHORTLIST_POOL } from "@/lib/types";
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -101,11 +103,12 @@ async function complete(args: {
   structured: boolean;
   signal: AbortSignal;
   schema?: unknown;
+  maxTokens?: number;
 }): Promise<{ ok: boolean; status: number; payload?: CompletionPayload }> {
   const body: Record<string, unknown> = {
     model: args.model,
     temperature: 0.2,
-    max_tokens: 700,
+    max_tokens: args.maxTokens ?? 700,
     messages: args.messages,
     provider: { require_parameters: true },
   };
@@ -210,24 +213,24 @@ export async function openRouterChat(
   }
 }
 
-const LENS_SCHEMA = {
-  name: "shopper_lens",
+const RANK_SCHEMA = {
+  name: "shortlist_rank",
   strict: true,
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["notes"],
+    required: ["cars"],
     properties: {
-      notes: {
+      cars: {
         type: "array",
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["id", "extra", "bump"],
+          required: ["id", "score", "insight"],
           properties: {
             id: { type: "string" },
-            extra: { type: "string" },
-            bump: { type: "number" },
+            score: { type: "number" },
+            insight: { type: "string" },
           },
         },
       },
@@ -235,78 +238,39 @@ const LENS_SCHEMA = {
   },
 } as const;
 
-/** Rank extras the shopper did not state: careful use, 1-owner-ish miles, cleanliness, reliability. */
-export async function enrichShortlist(matrix: MustHaveMatrix, rows: RankedRow[]): Promise<RankedRow[]> {
+/** Rank a 50-car pool down to 7–10 using the standardized scoring prompt + listing extras. */
+export async function rankShortlist(matrix: MustHaveMatrix, pool: RankedRow[]): Promise<RankedRow[]> {
   const key = process.env.OPENROUTER_API_KEY?.trim();
-  if (!key || !rows.length) return rows;
+  if (!key || pool.length <= SHORTLIST_KEEP_MAX) return pool.slice(0, SHORTLIST_KEEP_MAX);
   const model = process.env.OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
-  const compact = rows.slice(0, 12).map((row) => ({
-    id: row.listing.id,
-    year: row.listing.year,
-    make: row.listing.make,
-    model: row.listing.model,
-    price: row.listing.price,
-    miles: row.listing.miles,
-    fuel: row.listing.fuel,
-    mpg: row.listing.mpg,
-    drivetrain: row.listing.drivetrain,
-    seats: row.listing.seats,
-    photo: Boolean(row.listing.photo),
-  }));
+  const payload = pool.slice(0, SHORTLIST_POOL).map((row) => listingToRankRecord(row.listing));
+  const allowed = new Set(payload.map((row) => row.id));
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    {
-      role: "system",
-      content: `You advocate for a used-car shopper. They only stated: ${formatMustHaves(matrix)}.
-They did NOT mention owners, accidents, cleanliness, or how gently the car was used.
-Infer extra value from year vs miles (low miles/year ≈ one-owner / careful use), photos, make reliability, and whether a car looks like a cleaner example in this set.
-Return ONLY JSON {"notes":[{"id":"...","extra":"one short sentence","bump":0}]}
-bump is -6 to 8. Do not invent accidents or CarFax. If unsure, bump 0.`,
-    },
-    { role: "user", content: JSON.stringify(compact) },
+    { role: "system", content: scoringSystemPrompt(matrix) },
+    { role: "user", content: JSON.stringify(payload) },
   ];
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), 25000);
   try {
-    let result = await complete({ key, model, messages, structured: true, signal: controller.signal, schema: LENS_SCHEMA });
+    let result = await complete({
+      key,
+      model,
+      messages,
+      structured: true,
+      signal: controller.signal,
+      schema: RANK_SCHEMA,
+      maxTokens: 1800,
+    });
     if (!result.ok) {
-      result = await complete({ key, model, messages, structured: false, signal: controller.signal });
+      result = await complete({ key, model, messages, structured: false, signal: controller.signal, maxTokens: 1800 });
     }
     const content = result.payload?.choices?.[0]?.message?.content || "";
     const parsed = parseJsonObject(content);
-    const notes = Array.isArray(parsed?.notes) ? parsed.notes : [];
-    const byId = new Map<string, { extra: string; bump: number }>();
-    for (const note of notes) {
-      if (!note || typeof note !== "object") continue;
-      const rec = note as { id?: unknown; extra?: unknown; bump?: unknown };
-      if (typeof rec.id !== "string") continue;
-      byId.set(rec.id, {
-        extra: typeof rec.extra === "string" ? rec.extra.trim().slice(0, 240) : "",
-        bump: typeof rec.bump === "number" && Number.isFinite(rec.bump) ? Math.max(-6, Math.min(8, rec.bump)) : 0,
-      });
-    }
-    if (!byId.size) return rows;
-    return rows
-      .map((row) => {
-        const note = byId.get(row.listing.id);
-        if (!note) return row;
-        const total = Math.round(Math.min(96, Math.max(62, row.grade.total + note.bump)));
-        return {
-          listing: row.listing,
-          grade: {
-            ...row.grade,
-            total,
-            why: note.extra ? `${row.grade.why} ${note.extra}` : row.grade.why,
-          },
-        };
-      })
-      .sort(
-        (a, b) =>
-          b.grade.total - a.grade.total ||
-          a.listing.miles - b.listing.miles ||
-          b.listing.year - a.listing.year,
-      );
+    const picks = parseRankedPicks(parsed, allowed);
+    if (!picks.length) return pool.slice(0, SHORTLIST_KEEP_MAX);
+    return applyRankedPicks(pool, picks);
   } catch {
-    return rows;
+    return pool.slice(0, SHORTLIST_KEEP_MAX);
   } finally {
     clearTimeout(timer);
   }

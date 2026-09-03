@@ -31,11 +31,15 @@ describe("mapLiveListing", () => {
       price: 21900,
       miles: 41000,
       heading: "2021 Honda CR-V EX",
+      carfax_1_owner: true,
+      carfax_clean_title: true,
       build: { year: 2021, make: "Honda", model: "CR-V", body_type: "Sport Utility", drivetrain: "All Wheel Drive" },
       dealer: { city: "Tampa", state: "FL", zip: "33607", latitude: "27.95", longitude: "-82.46" },
     });
     expect(car?.body).toBe("suv");
     expect(car?.drivetrain).toBe("awd");
+    expect(car?.carfaxOneOwner).toBe(true);
+    expect(car?.carfaxCleanTitle).toBe(true);
     expect(car?.featuresUnknown).toBe(true);
   });
 

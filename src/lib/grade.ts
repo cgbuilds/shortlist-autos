@@ -271,9 +271,17 @@ export function localShopperLens(listing: Vehicle): { extra: string; bump: numbe
     bump -= 3;
     bits.push("higher miles-per-year than a typical commuter");
   }
-  if (reliabilityPoints(listing.make) >= 8) {
+  if (listing.carfaxOneOwner) {
+    bump += 4;
+    bits.push("listed as one-owner");
+  }
+  if (listing.carfaxCleanTitle) {
     bump += 2;
-    bits.push("a make that tends to age well");
+    bits.push("clean title flag on the listing");
+  }
+  if (listing.sellerComments && /clean|garage|one owner|1 owner|no accident/i.test(listing.sellerComments)) {
+    bump += 2;
+    bits.push("seller notes mention careful ownership");
   }
   if (!listing.photo) bits.push("no listing photo to judge cleanliness");
   if (!bits.length) bits.push("no extra condition signal beyond the numbers");
@@ -304,6 +312,11 @@ export function applyShopperLens(rows: RankedRow[]): RankedRow[] {
     );
 }
 
+export function gradeFromModelScore(total: number, why: string): Grade {
+  const n = clamp(Math.round(total), 64, 96);
+  return { total: n, band: bandFor(n, false), mustHaveFailed: false, why };
+}
+
 export function looksLikeMatrix(value: unknown): value is MustHaveMatrix {
   return Boolean(value && typeof value === "object" && typeof (value as MustHaveMatrix).searchArea === "string");
 }
@@ -314,7 +327,7 @@ export function sanitizeVehicles(value: unknown): Vehicle[] {
   for (const item of value) {
     if (item && typeof item === "object" && "id" in item && "make" in item && "model" in item) {
       out.push(item as Vehicle);
-      if (out.length >= 40) break;
+      if (out.length >= 50) break;
     }
   }
   return out;

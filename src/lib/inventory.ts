@@ -31,6 +31,13 @@ type MarketcheckListing = {
   price?: number;
   miles?: number;
   vdp_url?: string;
+  carfax_1_owner?: boolean;
+  carfax_clean_title?: boolean;
+  is_certified?: number;
+  exterior_color?: string;
+  interior_color?: string;
+  dom?: number;
+  dist?: number;
   media?: { photo_links?: string[]; photo_links_cached?: string[] };
   dealer?: {
     name?: string;
@@ -140,6 +147,13 @@ export function mapLiveListing(row: MarketcheckListing): Vehicle | null {
     photo,
     featuresUnknown: true,
     drivetrainUnknown: !row.build?.drivetrain,
+    carfaxOneOwner: row.carfax_1_owner === true,
+    carfaxCleanTitle: row.carfax_clean_title === true,
+    certified: row.is_certified === 1,
+    exteriorColor: row.exterior_color || undefined,
+    interiorColor: row.interior_color || undefined,
+    daysOnMarket: typeof row.dom === "number" ? row.dom : undefined,
+    distMiles: typeof row.dist === "number" ? row.dist : undefined,
   };
 }
 
@@ -429,4 +443,64 @@ export async function loadInventory(query: InventoryQuery): Promise<InventoryRes
     scanned: sample.length,
     notice: { level: live.notice?.level === "error" ? "error" : "warning", message: `${fallback} Showing sample cars instead.` },
   };
+}
+
+function asStringList(value: unknown, cap: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.trim())
+    .slice(0, cap);
+}
+
+async function fetchListingDetail(
+  id: string,
+  key: string,
+  signal: AbortSignal,
+): Promise<{ sellerComments?: string; options?: string[]; features?: string[] }> {
+  const url = `https://api.marketcheck.com/v2/listing/car/${encodeURIComponent(id)}?api_key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, { signal, cache: "no-store" });
+  if (!res.ok) return {};
+  const data = (await res.json()) as {
+    extra?: { seller_comments?: unknown; options?: unknown; features?: unknown; high_value_features?: unknown };
+  };
+  const extra = data.extra || {};
+  const comments = typeof extra.seller_comments === "string" ? extra.seller_comments.replace(/\s+/g, " ").trim().slice(0, 1600) : "";
+  const hvf = asStringList(extra.high_value_features, 24);
+  const features = asStringList(extra.features, 24);
+  return {
+    sellerComments: comments || undefined,
+    options: asStringList(extra.options, 24),
+    features: [...hvf, ...features].slice(0, 24),
+  };
+}
+
+/** Pull seller_comments / options for the shortlist pool. Failures are skipped. */
+export async function attachListingExtras(listings: Vehicle[]): Promise<Vehicle[]> {
+  const key = process.env.MARKETCHECK_API_KEY?.trim();
+  if (!key || !listings.length) return listings;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 14000);
+  let cursor = 0;
+  const out: Vehicle[] = listings.map((row) => row);
+  async function worker() {
+    while (cursor < listings.length) {
+      const i = cursor;
+      cursor += 1;
+      const listing = listings[i];
+      if (!listing) continue;
+      try {
+        const extra = await fetchListingDetail(listing.id, key as string, controller.signal);
+        out[i] = { ...listing, ...extra };
+      } catch {
+        out[i] = listing;
+      }
+    }
+  }
+  try {
+    await Promise.all(Array.from({ length: Math.min(8, listings.length) }, () => worker()));
+    return out;
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -21,7 +21,7 @@ Chat-first used-car shortlist. Default layout is **Gallery** (4:3 desktop thumbn
 
 **Chat:** `/api/chat` uses **OpenRouter** when `OPENROUTER_API_KEY` is set. Model comes from `OPENROUTER_MODEL` (default `openrouter/auto`). Confirm / “yes” still skip the model. If the key is missing or OpenRouter fails, the deterministic parser in `src/lib/chat.ts` is the fallback. LLM output is sanitized onto `MustHaveMatrix` before search.
 
-**Flow:** `/app` lands on **Gallery** with a **small centered chat**. One pill per preference (Type, Price, Year, Miles, Drive, Fuel, Seats). Tap uses a smart default (SUV, $45k, 2023+, 70k mi, AWD, Hybrid, 3-row). Hold and slide to change. Search uses those as a **narrow score base** and a **wider fetch net**. OpenRouter then adds extras the shopper didn’t type (careful use / 1-owner-ish miles, reliability). Search is blocked until price and body exist.
+**Scoring:** Base pills → MarketCheck **wide net**. Local grade takes the top **50**. Live rows get listing-detail extras (`seller_comments`, options, Carfax one-owner / clean-title). OpenRouter scores that JSON down to **7–10** cars with a per-car insight. If the model is missing, the local top 10 is used.
 
 Car photos live in `public/cars/{listing-id}.jpg` for sample rows (Wikimedia Commons). Live rows use the listing photo when the feed includes one.
 

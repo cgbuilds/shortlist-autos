@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 import { formatMustHaves } from "@/lib/chat";
 import { applyShopperLens, looksLikeMatrix, sanitizeVehicles, searchVehicles } from "@/lib/grade";
 import { widenForSearch } from "@/lib/intake";
-import { loadInventory } from "@/lib/inventory";
-import { enrichShortlist } from "@/lib/openrouter";
-import { BROWSE_MATRIX, DEMO_COOKIE } from "@/lib/types";
+import { attachListingExtras, loadInventory } from "@/lib/inventory";
+import { rankShortlist } from "@/lib/openrouter";
+import { BROWSE_MATRIX, DEMO_COOKIE, SHORTLIST_POOL } from "@/lib/types";
 import type { SearchMode } from "@/lib/types";
 
 function isMode(value: unknown): value is SearchMode {
@@ -35,8 +35,14 @@ export async function POST(request: Request) {
     ? { listings: owned, source: "session" as const, origin: undefined, scanned: owned.length, notice: undefined }
     : await loadInventory({ matrix: filter, scoreMatrix: matrix, mode, here });
   const ranked = searchVehicles(inventory.listings, matrix, filter);
-  const results =
-    mode === "grade" ? await enrichShortlist(matrix, applyShopperLens(ranked.results)) : ranked.results;
+  let results = ranked.results;
+  if (mode === "grade" && ranked.results.length) {
+    const pool = applyShopperLens(ranked.results).slice(0, SHORTLIST_POOL);
+    const extras = await attachListingExtras(pool.map((row) => row.listing));
+    const byId = new Map(extras.map((listing) => [listing.id, listing]));
+    const withExtras = pool.map((row) => ({ listing: byId.get(row.listing.id) ?? row.listing, grade: row.grade }));
+    results = await rankShortlist(matrix, withExtras);
+  }
   let notice = inventory.notice;
   if (mode === "grade" && ranked.results.length === 0) {
     const area = inventory.origin?.label || matrix.searchArea;
