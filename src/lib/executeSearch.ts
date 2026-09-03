@@ -26,6 +26,24 @@ function isMode(value: unknown): value is SearchMode {
   return value === "browse" || value === "grade";
 }
 
+function pause(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function holdStage<T>(
+  emit: (event: SearchStatusEvent) => void,
+  stage: SearchStatusEvent["stage"],
+  work: () => Promise<T>,
+  holdMs: number,
+): Promise<T> {
+  emit(statusPayload(stage));
+  const started = Date.now();
+  const value = await work();
+  const rest = holdMs - (Date.now() - started);
+  if (rest > 0) await pause(rest);
+  return value;
+}
+
 export async function executeSearch(
   body: { matrix?: unknown; listings?: unknown; mode?: unknown; lat?: unknown; lng?: unknown },
   emit: (event: SearchStatusEvent) => void = () => undefined,
@@ -39,22 +57,25 @@ export async function executeSearch(
       : null;
   const filter = mode === "grade" ? widenForSearch(matrix) : matrix;
 
-  emit(statusPayload("pull"));
-  const inventory = owned.length
-    ? { listings: owned, source: "session" as const, origin: undefined, scanned: owned.length, notice: undefined }
-    : await loadInventory({ matrix: filter, scoreMatrix: matrix, mode, here });
+  const hold = mode === "grade" ? 750 : 0;
+  const inventory = await holdStage(
+    emit,
+    "pull",
+    async () =>
+      owned.length
+        ? { listings: owned, source: "session" as const, origin: undefined, scanned: owned.length, notice: undefined }
+        : loadInventory({ matrix: filter, scoreMatrix: matrix, mode, here }),
+    hold,
+  );
 
   const ranked = searchVehicles(inventory.listings, matrix, filter);
   let results = ranked.results;
   if (mode === "grade" && ranked.results.length) {
-    emit(statusPayload("pool"));
-    const pool = applyShopperLens(ranked.results).slice(0, SHORTLIST_POOL);
-    emit(statusPayload("extras"));
-    const extras = await attachListingExtras(pool.map((row) => row.listing));
+    const pool = await holdStage(emit, "pool", async () => applyShopperLens(ranked.results).slice(0, SHORTLIST_POOL), hold);
+    const extras = await holdStage(emit, "extras", async () => attachListingExtras(pool.map((row) => row.listing)), hold);
     const byId = new Map(extras.map((listing) => [listing.id, listing]));
     const withExtras = pool.map((row) => ({ listing: byId.get(row.listing.id) ?? row.listing, grade: row.grade }));
-    emit(statusPayload("ai"));
-    results = await rankShortlist(matrix, withExtras);
+    results = await holdStage(emit, "ai", async () => rankShortlist(matrix, withExtras), hold);
   }
 
   let notice = inventory.notice;

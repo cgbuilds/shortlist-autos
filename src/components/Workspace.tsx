@@ -24,12 +24,14 @@ function ChatSheet({
   matrix,
   invite,
   searching,
+  searchLine,
   onDraft,
   onConfirm,
 }: {
   matrix: MustHaveMatrix;
   invite: boolean;
   searching: boolean;
+  searchLine?: string;
   onDraft: (matrix: MustHaveMatrix) => void;
   onConfirm: (matrix: MustHaveMatrix) => void;
 }) {
@@ -118,7 +120,7 @@ function ChatSheet({
             );
           })}
         </div>
-        {hint ? <p className="mt-1.5 text-xs text-[var(--muted)]">{hint}</p> : null}
+        {searching && searchLine ? <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)]">{searchLine}</p> : hint ? <p className="mt-1.5 text-xs text-[var(--muted)]">{hint}</p> : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 text-sm">
         {messages.map((msg, i) => (
@@ -156,7 +158,7 @@ function ChatSheet({
             disabled={busy || searching}
             onClick={() => void send("search", true)}
           >
-            {searching ? "Searching…" : "Search"}
+            {searching ? "Working…" : "Search"}
           </button>
           <button className="inline-flex min-h-10 flex-[0.65] items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm text-white disabled:opacity-50" type="submit" disabled={busy || searching}>
             {busy ? "On it…" : "Send"}
@@ -608,21 +610,22 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
             </section>
           </div>
         )}
-        {searching ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_oklab,var(--paper)_62%,transparent)] px-4">
-            <div className="max-w-md rounded-2xl border border-[var(--line)] bg-[var(--paper-2)] px-5 py-4 text-center shadow-sm">
-              <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{searchBeat.label}</p>
-              <p className="mt-2 text-sm font-medium leading-relaxed text-[var(--ink)]">{searchBeat.line || "Searching…"}</p>
-            </div>
-          </div>
-        ) : null}
         {chatOpen ? null : <ChatFab className="absolute bottom-5 right-5 z-20" nudge={invite && !confirmed} onClick={openChat} />}
       </div>
+      {searching ? (
+        <div className="pointer-events-none fixed inset-0 z-[2100] flex items-center justify-center bg-[color-mix(in_oklab,var(--paper)_55%,transparent)] px-4">
+          <div className="max-w-md rounded-2xl border border-[var(--line)] bg-[var(--paper-2)] px-5 py-4 text-center shadow-xl">
+            <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{searchBeat.label}</p>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-[var(--ink)]">{searchBeat.line || "Searching…"}</p>
+          </div>
+        </div>
+      ) : null}
       <ChatModal open={chatOpen} onClose={closeChat} onKeyboard={setKeyboard}>
         <ChatSheet
           matrix={matrix}
           invite={invite && !confirmed}
           searching={searching}
+          searchLine={searchBeat.line}
           onDraft={(next) => {
             setMatrix(next);
             writeStoredSession({ matrix: next, confirmed: false });
