@@ -1,4 +1,4 @@
-import { chatReply, formatMustHaves, parseJsonObject, sanitizeMatrix, type ChatReply } from "@/lib/chat";
+import { chatReply, formatMustHaves, nextFollowUp, nextScoringPrompt, parseJsonObject, sanitizeMatrix, type ChatReply } from "@/lib/chat";
 import { hasMustHaves } from "@/lib/grade";
 import type { MustHaveMatrix } from "@/lib/types";
 
@@ -81,8 +81,11 @@ Rules:
 - preferFuel is the same enum or null. Use it when they say ideally / prefer / not strictly / not a must. Leave fuel null in that case.
 - "3 row" / third row means minSeats 7.
 - awaitingConfirm is true when you updated or restated must-haves and they have not confirmed yet.
-- rescore is true only if they clearly asked you to search/grade now (confirm, go, find them).
-- reply: 1-3 short sentences. Read the must-haves back. Ask them to confirm before search unless they already did.
+- rescore is true only if they clearly asked you to search/grade now AND they have a maxPrice (or they said search anyway / skip).
+- If maxPrice is missing, ask "What's your max price?" in one short line. Do not invent a budget.
+- If they named a car type but no body is set, ask SUV / sedan / truck in one short line.
+- If price and body are set but miles and year are both missing, mention that max miles or a year floor helps scoring, then tell them they can press Search.
+- reply: 1-2 short sentences. No lists of every possible filter. Ask one follow-up at a time.
 - No markdown, no extra keys.`;
 }
 
@@ -165,11 +168,28 @@ export async function openRouterChat(
       return { ...fallback, source: "parser" };
     }
     const matrix = sanitizeMatrix(parsed.matrix, draft);
-    const reply =
+    const followUp = nextFollowUp(matrix);
+    const scoring = followUp ? null : nextScoringPrompt(matrix);
+    const skipFollowUp = /\b(anyway|skip|no budget|whatever|just search|search anyway)\b/i.test(text);
+    let rescore = parsed.rescore === true && hasMustHaves(matrix) && (!followUp || skipFollowUp);
+    let reply =
       typeof parsed.reply === "string" && parsed.reply.trim()
         ? parsed.reply.trim().slice(0, 800)
-        : `I heard: ${formatMustHaves(matrix)}. Confirm these must-haves and I’ll search and grade.`;
-    const rescore = parsed.rescore === true && hasMustHaves(matrix);
+        : followUp
+          ? `Got ${formatMustHaves(matrix)}. ${followUp}`
+          : scoring
+            ? `Got ${formatMustHaves(matrix)}. ${scoring}`
+            : `Got ${formatMustHaves(matrix)}. Press Search when you’re ready.`;
+    if (!rescore && followUp && !reply.includes("?")) {
+      reply = `${reply.replace(/\.*$/, "")}. ${followUp}`;
+    }
+    if (!rescore && scoring && !/\bmiles\b|\byear\b/i.test(reply)) {
+      reply = `${reply.replace(/\.*$/, "")}. ${scoring}`;
+    }
+    if (parsed.rescore === true && followUp && !skipFollowUp) {
+      rescore = false;
+      reply = followUp;
+    }
     return {
       matrix,
       reply,

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { chatReply, isConfirmText } from "@/lib/chat";
 import { looksLikeMatrix } from "@/lib/grade";
 import { openRouterChat, type ChatTurn } from "@/lib/openrouter";
-import { BROWSE_MATRIX, DEMO_COOKIE } from "@/lib/types";
+import { DEMO_COOKIE, emptyIntakeMatrix } from "@/lib/types";
 
 function sanitizeHistory(value: unknown): ChatTurn[] {
   if (!Array.isArray(value)) return [];
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing text" }, { status: 400 });
   }
   const text = body.text.trim();
-  const draft = looksLikeMatrix(body.draft) ? body.draft : BROWSE_MATRIX;
+  const draft = looksLikeMatrix(body.draft) ? body.draft : emptyIntakeMatrix();
   if (body.confirm === true || isConfirmText(text)) {
     return NextResponse.json({ ...chatReply(text, draft, true), source: "parser" });
   }

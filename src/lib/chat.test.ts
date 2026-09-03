@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { chatReply, parseJsonObject, parseMustHaves, sanitizeMatrix } from "./chat";
 import { openRouterChat } from "./openrouter";
-import { BROWSE_MATRIX, DEFAULT_MATRIX } from "./types";
+import { BROWSE_MATRIX, DEFAULT_MATRIX, emptyIntakeMatrix } from "./types";
 
 describe("chatReply", () => {
   it("parses must-haves and waits for confirm instead of searching", () => {
@@ -9,7 +9,7 @@ describe("chatReply", () => {
     expect(rescore).toBe(false);
     expect(awaitingConfirm).toBe(true);
     expect(matrix.maxPrice).toBe(30000);
-    expect(reply).toMatch(/I heard:/);
+    expect(reply).toMatch(/Got /);
     expect(reply).toMatch(/Tampa, FL/);
     expect(reply).toMatch(/AWD\/4WD/);
     expect(reply).toMatch(/CarPlay/);
@@ -20,11 +20,33 @@ describe("chatReply", () => {
     const { rescore, awaitingConfirm, reply } = chatReply("confirm", draft, true);
     expect(rescore).toBe(true);
     expect(awaitingConfirm).toBe(false);
-    expect(reply).toMatch(/Searching nearby listings/);
+    expect(reply).toMatch(/Searching near/);
   });
 
   it("treats yes as confirm", () => {
     expect(chatReply("yes", DEFAULT_MATRIX).rescore).toBe(true);
+  });
+
+  it("asks for price before searching an empty intake", () => {
+    const { rescore, reply, awaitingConfirm } = chatReply("search", emptyIntakeMatrix(), true);
+    expect(rescore).toBe(false);
+    expect(awaitingConfirm).toBe(true);
+    expect(reply).toMatch(/price/i);
+  });
+
+  it("asks for a body when budget is set but type is not", () => {
+    const draft = parseMustHaves("under 45k", emptyIntakeMatrix());
+    expect(draft.maxPrice).toBe(45000);
+    const { reply, rescore } = chatReply("ok that's my budget", draft);
+    expect(rescore).toBe(false);
+    expect(reply).toMatch(/SUV|sedan|truck/i);
+  });
+
+  it("asks for scoring detail after price and body, without searching yet", () => {
+    const { reply, rescore, awaitingConfirm } = chatReply("SUV under 45k", emptyIntakeMatrix());
+    expect(rescore).toBe(false);
+    expect(awaitingConfirm).toBe(true);
+    expect(reply).toMatch(/miles|year/i);
   });
 });
 
