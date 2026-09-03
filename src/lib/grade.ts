@@ -135,6 +135,7 @@ function whyText(listing: Vehicle, matrix: MustHaveMatrix, failed: boolean): str
   const workLine = works.length ? ` What works: ${works.join(", ")}.` : "";
   const trade: string[] = [];
   if (matrix.preferFuel === "plugin-hybrid" && listing.fuel === "gas") trade.push("gas only, not plug-in");
+  if (matrix.awd && !isAwd(listing)) trade.push("not AWD/4WD");
   if (matrix.minSeats >= 7 && listing.seats < 7 && !likelyThreeRow(listing)) trade.push("not clearly 3-row");
   if (listing.mpg != null && listing.mpg < 24) trade.push(`${listing.mpg} mpg is ordinary`);
   if (reliabilityPoints(listing.make) <= 2) trade.push("reliability is a weaker bet than Toyota/Honda");
@@ -177,6 +178,11 @@ export function rawFitScore(listing: Vehicle, matrix: MustHaveMatrix): number {
   }
   total += reliabilityPoints(listing.make);
   if (listing.photo) total += 2;
+  if (matrix.awd && isAwd(listing)) total += 6;
+  if (matrix.carplay && listing.carplay) total += 2;
+  const age = Math.max(1, new Date().getFullYear() - listing.year + 1);
+  const milesPerYear = listing.miles / age;
+  total += 8 * clamp(1 - (milesPerYear - 6000) / 14000, 0, 1);
   if (matrix.maxPrice) {
     const value = clamp(1 - listing.price / matrix.maxPrice, 0, 1) * clamp(1 - listing.miles / Math.max(mileCap, 1), 0, 1);
     total += 6 * value;
@@ -220,10 +226,25 @@ export function gradeListing(listing: Vehicle, matrix: MustHaveMatrix): Grade {
   };
 }
 
-export function searchVehicles(listings: Vehicle[], matrix: MustHaveMatrix): { results: RankedRow[]; listings: Vehicle[]; totalMatched: number } {
+export function searchVehicles(
+  listings: Vehicle[],
+  matrix: MustHaveMatrix,
+  filterMatrix: MustHaveMatrix = matrix,
+): { results: RankedRow[]; listings: Vehicle[]; totalMatched: number } {
   const matched = listings
-    .map((listing) => ({ listing, grade: gradeListing(listing, matrix) }))
-    .filter((row) => !row.grade.mustHaveFailed);
+    .filter((listing) => !mustHaveFailed(listing, filterMatrix))
+    .map((listing) => {
+      const total = Math.round(rawFitScore(listing, matrix));
+      return {
+        listing,
+        grade: {
+          total,
+          band: bandFor(total, false),
+          mustHaveFailed: false,
+          why: whyText(listing, matrix, false),
+        },
+      };
+    });
   const ranked = stretchScores(matched).sort(
     (a, b) =>
       b.grade.total - a.grade.total ||
@@ -238,6 +259,64 @@ export function searchVehicles(listings: Vehicle[], matrix: MustHaveMatrix): { r
   };
 }
 
+export function localShopperLens(listing: Vehicle): { extra: string; bump: number } {
+  const age = Math.max(1, new Date().getFullYear() - listing.year + 1);
+  const milesPerYear = listing.miles / age;
+  const bits: string[] = [];
+  let bump = 0;
+  if (milesPerYear <= 8500) {
+    bump += 5;
+    bits.push("low miles for its year — often a one-owner or carefully used car");
+  } else if (milesPerYear >= 16000) {
+    bump -= 3;
+    bits.push("higher miles-per-year than a typical commuter");
+  }
+  if (listing.carfaxOneOwner) {
+    bump += 4;
+    bits.push("listed as one-owner");
+  }
+  if (listing.carfaxCleanTitle) {
+    bump += 2;
+    bits.push("clean title flag on the listing");
+  }
+  if (listing.sellerComments && /clean|garage|one owner|1 owner|no accident/i.test(listing.sellerComments)) {
+    bump += 2;
+    bits.push("seller notes mention careful ownership");
+  }
+  if (!listing.photo) bits.push("no listing photo to judge cleanliness");
+  if (!bits.length) bits.push("no extra condition signal beyond the numbers");
+  return { extra: `Also worth knowing: ${bits.join("; ")}.`, bump };
+}
+
+export function applyShopperLens(rows: RankedRow[]): RankedRow[] {
+  return rows
+    .map((row) => {
+      const lens = localShopperLens(row.listing);
+      const total = Math.round(clamp(row.grade.total + lens.bump, 62, 96));
+      return {
+        listing: row.listing,
+        grade: {
+          ...row.grade,
+          total,
+          band: bandFor(total, false),
+          why: `${row.grade.why} ${lens.extra}`,
+        },
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.grade.total - a.grade.total ||
+        a.listing.miles - b.listing.miles ||
+        b.listing.year - a.listing.year ||
+        a.listing.price - b.listing.price,
+    );
+}
+
+export function gradeFromModelScore(total: number, why: string): Grade {
+  const n = clamp(Math.round(total), 64, 96);
+  return { total: n, band: bandFor(n, false), mustHaveFailed: false, why };
+}
+
 export function looksLikeMatrix(value: unknown): value is MustHaveMatrix {
   return Boolean(value && typeof value === "object" && typeof (value as MustHaveMatrix).searchArea === "string");
 }
@@ -248,7 +327,7 @@ export function sanitizeVehicles(value: unknown): Vehicle[] {
   for (const item of value) {
     if (item && typeof item === "object" && "id" in item && "make" in item && "model" in item) {
       out.push(item as Vehicle);
-      if (out.length >= 40) break;
+      if (out.length >= 50) break;
     }
   }
   return out;

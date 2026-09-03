@@ -1,6 +1,8 @@
 import { chatReply, formatMustHaves, nextFollowUp, nextScoringPrompt, parseJsonObject, sanitizeMatrix, type ChatReply } from "@/lib/chat";
 import { hasMustHaves } from "@/lib/grade";
-import type { MustHaveMatrix } from "@/lib/types";
+import { applyRankedPicks, listingToRankRecord, parseRankedPicks, scoringSystemPrompt } from "@/lib/shortlistRank";
+import type { MustHaveMatrix, RankedRow } from "@/lib/types";
+import { SHORTLIST_KEEP_MAX, SHORTLIST_POOL } from "@/lib/types";
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -100,16 +102,18 @@ async function complete(args: {
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
   structured: boolean;
   signal: AbortSignal;
+  schema?: unknown;
+  maxTokens?: number;
 }): Promise<{ ok: boolean; status: number; payload?: CompletionPayload }> {
   const body: Record<string, unknown> = {
     model: args.model,
     temperature: 0.2,
-    max_tokens: 500,
+    max_tokens: args.maxTokens ?? 700,
     messages: args.messages,
     provider: { require_parameters: true },
   };
   if (args.structured) {
-    body.response_format = { type: "json_schema", json_schema: MATRIX_SCHEMA };
+    body.response_format = { type: "json_schema", json_schema: args.schema ?? MATRIX_SCHEMA };
   }
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -204,6 +208,69 @@ export async function openRouterChat(
       source: "parser",
       reply: `${fallback.reply} (Chat model didn’t respond, so I used the basic parser.)`,
     };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const RANK_SCHEMA = {
+  name: "shortlist_rank",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["cars"],
+    properties: {
+      cars: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "score", "insight"],
+          properties: {
+            id: { type: "string" },
+            score: { type: "number" },
+            insight: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+/** Rank a 50-car pool down to 7–10 using the standardized scoring prompt + listing extras. */
+export async function rankShortlist(matrix: MustHaveMatrix, pool: RankedRow[]): Promise<RankedRow[]> {
+  const key = process.env.OPENROUTER_API_KEY?.trim();
+  if (!key || pool.length <= SHORTLIST_KEEP_MAX) return pool.slice(0, SHORTLIST_KEEP_MAX);
+  const model = process.env.OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
+  const payload = pool.slice(0, SHORTLIST_POOL).map((row) => listingToRankRecord(row.listing));
+  const allowed = new Set(payload.map((row) => row.id));
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: scoringSystemPrompt(matrix) },
+    { role: "user", content: JSON.stringify(payload) },
+  ];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    let result = await complete({
+      key,
+      model,
+      messages,
+      structured: true,
+      signal: controller.signal,
+      schema: RANK_SCHEMA,
+      maxTokens: 1800,
+    });
+    if (!result.ok) {
+      result = await complete({ key, model, messages, structured: false, signal: controller.signal, maxTokens: 1800 });
+    }
+    const content = result.payload?.choices?.[0]?.message?.content || "";
+    const parsed = parseJsonObject(content);
+    const picks = parseRankedPicks(parsed, allowed);
+    if (!picks.length) return pool.slice(0, SHORTLIST_KEEP_MAX);
+    return applyRankedPicks(pool, picks);
+  } catch {
+    return pool.slice(0, SHORTLIST_KEEP_MAX);
   } finally {
     clearTimeout(timer);
   }

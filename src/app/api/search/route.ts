@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { formatMustHaves } from "@/lib/chat";
-import { looksLikeMatrix, sanitizeVehicles, searchVehicles } from "@/lib/grade";
-import { loadInventory } from "@/lib/inventory";
-import { BROWSE_MATRIX, DEMO_COOKIE } from "@/lib/types";
+import { applyShopperLens, looksLikeMatrix, sanitizeVehicles, searchVehicles } from "@/lib/grade";
+import { widenForSearch } from "@/lib/intake";
+import { attachListingExtras, loadInventory } from "@/lib/inventory";
+import { rankShortlist } from "@/lib/openrouter";
+import { BROWSE_MATRIX, DEMO_COOKIE, SHORTLIST_POOL } from "@/lib/types";
 import type { SearchMode } from "@/lib/types";
 
 function isMode(value: unknown): value is SearchMode {
@@ -28,18 +30,29 @@ export async function POST(request: Request) {
     typeof body.lat === "number" && Number.isFinite(body.lat) && typeof body.lng === "number" && Number.isFinite(body.lng)
       ? { lat: body.lat, lng: body.lng }
       : null;
+  const filter = mode === "grade" ? widenForSearch(matrix) : matrix;
   const inventory = owned.length
     ? { listings: owned, source: "session" as const, origin: undefined, scanned: owned.length, notice: undefined }
-    : await loadInventory({ matrix, mode, here });
-  const result = searchVehicles(inventory.listings, matrix);
+    : await loadInventory({ matrix: filter, scoreMatrix: matrix, mode, here });
+  const ranked = searchVehicles(inventory.listings, matrix, filter);
+  let results = ranked.results;
+  if (mode === "grade" && ranked.results.length) {
+    const pool = applyShopperLens(ranked.results).slice(0, SHORTLIST_POOL);
+    const extras = await attachListingExtras(pool.map((row) => row.listing));
+    const byId = new Map(extras.map((listing) => [listing.id, listing]));
+    const withExtras = pool.map((row) => ({ listing: byId.get(row.listing.id) ?? row.listing, grade: row.grade }));
+    results = await rankShortlist(matrix, withExtras);
+  }
   let notice = inventory.notice;
-  if (mode === "grade" && result.results.length === 0) {
+  if (mode === "grade" && ranked.results.length === 0) {
     const area = inventory.origin?.label || matrix.searchArea;
     const empty = `Searched ${inventory.listings.length} ${inventory.source} cars near ${area}. None met ${formatMustHaves(matrix)}.`;
     notice = notice ? { ...notice, message: `${notice.message} ${empty}` } : { level: "warning", message: empty };
   }
   return NextResponse.json({
-    ...result,
+    ...ranked,
+    results,
+    totalMatched: results.length,
     source: inventory.source,
     mode,
     origin: inventory.origin,

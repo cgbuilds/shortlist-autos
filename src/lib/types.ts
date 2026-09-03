@@ -30,6 +30,16 @@ export type Vehicle = {
   /** Live feed often omits options; don’t fail CarPlay/camera/tow must-haves. */
   featuresUnknown?: boolean;
   drivetrainUnknown?: boolean;
+  carfaxOneOwner?: boolean;
+  carfaxCleanTitle?: boolean;
+  certified?: boolean;
+  exteriorColor?: string;
+  interiorColor?: string;
+  daysOnMarket?: number;
+  distMiles?: number;
+  sellerComments?: string;
+  options?: string[];
+  features?: string[];
 };
 
 export type LayoutMode = "gallery" | "split";
@@ -128,5 +138,8 @@ export const DEFAULT_MATRIX: MustHaveMatrix = {
 };
 
 export const SEARCH_RADIUS_MILES = 20;
+export const SHORTLIST_POOL = 50;
+export const SHORTLIST_KEEP_MIN = 7;
+export const SHORTLIST_KEEP_MAX = 10;
 export const SESSION_KEY = "shortlist-autos-session-v2";
 export const DEMO_COOKIE = "sa_demo";
