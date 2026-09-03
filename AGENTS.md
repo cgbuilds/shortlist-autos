@@ -19,6 +19,15 @@ Chat-first used-car shortlist. Default layout is **Gallery** (4:3 desktop thumbn
 
 **Inventory:** `/api/search` goes through `src/lib/inventory.ts`. With `MARKETCHECK_API_KEY` it pulls live used cars near the user (or Tampa). Without a key, or if the live call fails, it uses the 16-car Tampa sample in `src/data/vehicles.ts`. This is not a Cars.com scrape.
 
+**Check the live key** (does not print the secret; shows length + last 4 chars):
+
+```bash
+cp .env.example .env.local   # then paste MARKETCHECK_API_KEY=… (API Key, not client secret)
+npm run check:marketcheck
+```
+
+Or, after demo cookie: `GET /api/marketcheck`. `ok=true` means MarketCheck accepted the key. HTTP 401/403 means the wrong credential. Cursor environment secrets are not the same as Vercel env vars — set `MARKETCHECK_API_KEY` on both if you want live inventory in agents and production.
+
 **Chat:** `/api/chat` uses **OpenRouter** when `OPENROUTER_API_KEY` is set. Model comes from `OPENROUTER_MODEL` (default `openrouter/auto`). Confirm / “yes” still skip the model. If the key is missing or OpenRouter fails, the deterministic parser in `src/lib/chat.ts` is the fallback. LLM output is sanitized onto `MustHaveMatrix` before search.
 
 **Scoring:** Base pills → MarketCheck **wide net**. Local grade takes the top **50**. Live rows get listing-detail extras (`seller_comments`, options, Carfax one-owner / clean-title). OpenRouter scores that JSON down to **7–10** cars with a per-car insight. If the model is missing, the local top 10 is used.
@@ -39,6 +48,7 @@ Demo identity shown in the header: `family@demo.local`. Cookie: `sa_demo=1` (htt
 | `POST /api/demo` | Sets demo cookie, `{ok:true}` |
 | `POST /api/logout` | Clears cookie |
 | `POST /api/search` | `{matrix, mode: "browse"|"grade", lat?, lng?, listings?}` → `{results, listings, totalMatched, source, origin}` |
+| `GET /api/marketcheck` | Demo cookie required. Probes MarketCheck with the server key; returns `{ok, httpStatus, numFound, keySuffix, …}` (never the full key) |
 | `POST /api/chat` | `{text, draft, confirm?, history?}` → `{reply, matrix, rescore, awaitingConfirm, source}` |
 
 Chat without `text` → `400 {"error":"Missing text"}`. Search/chat without demo cookie → `401`.
@@ -68,5 +78,5 @@ Map: circle markers by grade band, 20-mile radius if geolocation succeeds and th
 
 1. Point the existing Vercel project at this GitHub repo (or import it) so source and production match.
 2. Port casa’s Supabase family accounts if those keys belong on autos too.
-3. Add `MARKETCHECK_API_KEY` on Vercel to serve live dealer listings instead of the Tampa sample.
+3. Add `MARKETCHECK_API_KEY` on Vercel **and** as a Cursor environment secret (API Key only). Verify with `npm run check:marketcheck`.
 4. `OPENROUTER_API_KEY` + `OPENROUTER_MODEL=openrouter/auto` are already wired.
