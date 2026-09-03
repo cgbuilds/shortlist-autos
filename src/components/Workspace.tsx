@@ -12,6 +12,7 @@ import { formatVehicleLine, gradeCaption, outboundLinks, readPhoneLocation, resu
 import { originFromCoords, TAMPA } from "@/lib/location";
 import { encodeShare, readLayoutMode, readStoredSession, shareUrlFromToken, writeLayoutMode, writeStoredSession } from "@/lib/session";
 import type { LayoutMode, MustHaveMatrix, RankedRow, SearchMode, Vehicle } from "@/lib/types";
+import { pickStatusLine, SEARCH_STAGE_LABEL, type SearchStage } from "@/lib/searchStatus";
 import { emptyIntakeMatrix } from "@/lib/types";
 
 const Map = dynamic(() => import("@/components/ResultsMap").then((m) => m.ResultsMap), {
@@ -23,12 +24,14 @@ function ChatSheet({
   matrix,
   invite,
   searching,
+  searchLine,
   onDraft,
   onConfirm,
 }: {
   matrix: MustHaveMatrix;
   invite: boolean;
   searching: boolean;
+  searchLine?: string;
   onDraft: (matrix: MustHaveMatrix) => void;
   onConfirm: (matrix: MustHaveMatrix) => void;
 }) {
@@ -117,7 +120,7 @@ function ChatSheet({
             );
           })}
         </div>
-        {hint ? <p className="mt-1.5 text-xs text-[var(--muted)]">{hint}</p> : null}
+        {searching && searchLine ? <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)]">{searchLine}</p> : hint ? <p className="mt-1.5 text-xs text-[var(--muted)]">{hint}</p> : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 text-sm">
         {messages.map((msg, i) => (
@@ -155,7 +158,7 @@ function ChatSheet({
             disabled={busy || searching}
             onClick={() => void send("search", true)}
           >
-            {searching ? "Searching…" : "Search"}
+            {searching ? "Working…" : "Search"}
           </button>
           <button className="inline-flex min-h-10 flex-[0.65] items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm text-white disabled:opacity-50" type="submit" disabled={busy || searching}>
             {busy ? "On it…" : "Send"}
@@ -360,6 +363,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
   const [invite, setInvite] = useState(true);
   const [confirmed, setConfirmed] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchBeat, setSearchBeat] = useState({ stage: "pull" as SearchStage, label: SEARCH_STAGE_LABEL.pull, line: "" });
   const [source, setSource] = useState<"live" | "sample" | "session">("sample");
   const [notice, setNotice] = useState<{ level: "error" | "warning"; message: string } | null>(null);
   const [sharedBanner, setSharedBanner] = useState(false);
@@ -388,6 +392,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
     options: { listings?: Vehicle[]; loc?: { lat: number; lng: number } | null; ownList?: boolean } = {},
   ) {
     setSearching(true);
+    setSearchBeat({ stage: "pull", label: SEARCH_STAGE_LABEL.pull, line: pickStatusLine("pull") });
     try {
       const ownList = options.ownList ?? hasOwnList;
       const loc = options.loc === undefined ? here : options.loc;
@@ -400,9 +405,12 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
           listings: ownList ? options.listings : undefined,
           lat: loc?.lat,
           lng: loc?.lng,
+          stream: true,
         }),
       });
-      const data = (await res.json()) as {
+      const ctype = res.headers.get("content-type") || "";
+      let data: {
+        type?: string;
         results?: RankedRow[];
         listings?: Vehicle[];
         totalMatched?: number;
@@ -410,7 +418,41 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
         origin?: { label?: string };
         notice?: { level?: "error" | "warning"; message?: string };
         error?: string;
-      };
+      } = {};
+      if (res.body && ctype.includes("ndjson")) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          buf += decoder.decode(chunk.value, { stream: true });
+          const parts = buf.split("\n");
+          buf = parts.pop() ?? "";
+          for (const part of parts) {
+            if (!part.trim()) continue;
+            let msg: typeof data & { stage?: SearchStage; label?: string; line?: string };
+            try {
+              msg = JSON.parse(part) as typeof msg;
+            } catch {
+              continue;
+            }
+            if (msg.type === "status" && msg.stage && msg.line) {
+              setSearchBeat({
+                stage: msg.stage,
+                label: msg.label || SEARCH_STAGE_LABEL[msg.stage],
+                line: msg.line,
+              });
+            } else if (msg.type === "done") {
+              data = msg;
+            } else if (msg.type === "error") {
+              throw new Error(typeof msg.error === "string" ? msg.error : "Search failed.");
+            }
+          }
+        }
+      } else {
+        data = (await res.json()) as typeof data;
+      }
       if (!res.ok) {
         setNotice({ level: "error", message: typeof data.error === "string" ? data.error : `Search failed (HTTP ${res.status}).` });
         setRows([]);
@@ -478,17 +520,21 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
   }, []);
 
   useEffect(() => {
+    if (!searching) return;
+    const timer = window.setInterval(() => {
+      setSearchBeat((current) => ({ ...current, line: pickStatusLine(current.stage, current.line) }));
+    }, 2400);
+    return () => window.clearInterval(timer);
+  }, [searching]);
+
+  useEffect(() => {
     if (confirmed || chatOpen) return;
     setInvite(true);
   }, [confirmed, chatOpen]);
 
   const mapHere = here ?? { lat: TAMPA.lat, lng: TAMPA.lng };
   const graded = confirmed;
-  const headline = searching
-    ? "Searching…"
-    : graded
-      ? resultsHeadline(rows.length, matched)
-      : `Near ${matrix.searchArea}`;
+  const headline = searching ? searchBeat.label : graded ? resultsHeadline(rows.length, matched) : `Near ${matrix.searchArea}`;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -564,18 +610,22 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
             </section>
           </div>
         )}
-        {searching ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_oklab,var(--paper)_55%,transparent)] text-sm font-medium">
-            Searching and grading…
-          </div>
-        ) : null}
         {chatOpen ? null : <ChatFab className="absolute bottom-5 right-5 z-20" nudge={invite && !confirmed} onClick={openChat} />}
       </div>
+      {searching ? (
+        <div className="pointer-events-none fixed inset-0 z-[2100] flex items-center justify-center bg-[color-mix(in_oklab,var(--paper)_55%,transparent)] px-4">
+          <div className="max-w-md rounded-2xl border border-[var(--line)] bg-[var(--paper-2)] px-5 py-4 text-center shadow-xl">
+            <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{searchBeat.label}</p>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-[var(--ink)]">{searchBeat.line || "Searching…"}</p>
+          </div>
+        </div>
+      ) : null}
       <ChatModal open={chatOpen} onClose={closeChat} onKeyboard={setKeyboard}>
         <ChatSheet
           matrix={matrix}
           invite={invite && !confirmed}
           searching={searching}
+          searchLine={searchBeat.line}
           onDraft={(next) => {
             setMatrix(next);
             writeStoredSession({ matrix: next, confirmed: false });
