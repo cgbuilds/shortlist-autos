@@ -351,7 +351,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
   const [sharedBanner, setSharedBanner] = useState(false);
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [hasOwnList, setHasOwnList] = useState(false);
-  const [layout, setLayout] = useState<LayoutMode>("split");
+  const [layout, setLayout] = useState<LayoutMode>("gallery");
 
   function changeLayout(next: LayoutMode) {
     setLayout(next);
@@ -430,7 +430,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
       window.history.replaceState({}, "", "/app");
     }
     const stored = readStoredSession();
-    setLayout(stored.confirmed ? readLayoutMode() : "split");
+    setLayout(stored.confirmed ? readLayoutMode() : "gallery");
     if (stored.hasOwnList) setHasOwnList(true);
     void (async () => {
       const loc = await readPhoneLocation();

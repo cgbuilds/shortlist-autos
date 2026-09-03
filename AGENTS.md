@@ -21,7 +21,7 @@ Chat-first used-car shortlist. Default layout is **Gallery** (4:3 desktop thumbn
 
 **Chat:** `/api/chat` uses **OpenRouter** when `OPENROUTER_API_KEY` is set. Model comes from `OPENROUTER_MODEL` (default `openrouter/auto`). Confirm / “yes” still skip the model. If the key is missing or OpenRouter fails, the deterministic parser in `src/lib/chat.ts` is the fallback. LLM output is sanitized onto `MustHaveMatrix` before search.
 
-**Flow:** `/app` lands on **Split** (map + empty list) with a **small chat** already open. Location is prefilled (geolocation, else Tampa). Suggestion chips are queued. Chat asks for missing basics (especially **price**, then body) and optional scoring detail (miles / year). **Search** pulls and grades the list; Search is blocked until those follow-ups are answered (or the shopper says search anyway). Copy link shares a deflate-raw token in `/s#s1.…`.
+**Flow:** `/app` lands on **Gallery** (list only, no map) with a **small chat** already open. Location is prefilled (geolocation, else Tampa). Suggestion chips are queued. Chat asks for missing basics (especially **price**, then body) and optional scoring detail (miles / year). **Search** pulls and grades the list; Search is blocked until those follow-ups are answered (or the shopper says search anyway). Split view (map) stays behind the layout toggle. Copy link shares a deflate-raw token in `/s#s1.…`.
 
 Car photos live in `public/cars/{listing-id}.jpg` for sample rows (Wikimedia Commons). Live rows use the listing photo when the feed includes one.
 
