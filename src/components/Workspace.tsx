@@ -4,7 +4,9 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Gallery } from "@/components/Gallery";
 import { ViewToggle } from "@/components/ViewToggle";
-import { formatMustHaves, INTAKE_PILLS, introMessage, matrixFromPills, nextFollowUp, nextScoringPrompt, toggleIntakePill } from "@/lib/chat";
+import { formatMustHaves, introMessage, nextFollowUp, nextScoringPrompt } from "@/lib/chat";
+import { PrefPill } from "@/components/PrefPill";
+import { INTAKE_PREFS, matrixFromIntake, setPrefIndex, togglePref, type IntakeState } from "@/lib/intake";
 import { hasMustHaves, isImpressionMatrix } from "@/lib/grade";
 import { formatVehicleLine, gradeCaption, outboundLinks, readPhoneLocation, resultsHeadline, vehiclePhoto, vehicleTitle } from "@/lib/format";
 import { originFromCoords, TAMPA } from "@/lib/location";
@@ -32,25 +34,19 @@ function ChatSheet({
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [pills, setPills] = useState<string[]>([]);
+  const [prefs, setPrefs] = useState<IntakeState>({});
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
 
+  function applyPrefs(next: IntakeState) {
+    setPrefs(next);
+    onDraft(matrixFromIntake(next, matrix.searchArea));
+  }
+
   useEffect(() => {
-    if (!pills.length) return;
-    onDraft(matrixFromPills(pills, matrix.searchArea));
-    // Re-apply taps if geolocation updates the area.
+    if (!Object.keys(prefs).length) return;
+    onDraft(matrixFromIntake(prefs, matrix.searchArea));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matrix.searchArea]);
-
-  function applyPills(nextIds: string[]) {
-    setPills(nextIds);
-    onDraft(matrixFromPills(nextIds, matrix.searchArea));
-  }
-
-  function togglePill(id: string) {
-    if (busy || searching) return;
-    applyPills(toggleIntakePill(pills, id));
-  }
 
   const hint = nextFollowUp(matrix) ?? nextScoringPrompt(matrix);
 
@@ -97,19 +93,27 @@ function ChatSheet({
         <p className="text-sm text-[var(--muted)]">{introMessage(matrix.searchArea)}</p>
         <p className="mt-1 text-xs text-[var(--ink)]">{formatMustHaves(matrix)}</p>
         <div className="mt-2 flex flex-wrap gap-1">
-          {INTAKE_PILLS.map((item) => {
-            const on = pills.includes(item.id);
+          {INTAKE_PREFS.map((def) => {
+            const selected = prefs[def.key];
+            const on = selected != null;
+            const index = selected ?? def.defaultIndex;
             return (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={on}
+              <PrefPill
+                key={def.key}
+                offLabel={def.offLabel}
+                options={def.options}
+                index={index}
+                on={on}
                 disabled={busy || searching}
-                className={`rounded-full border px-2.5 py-1 text-xs leading-tight disabled:opacity-50 ${on ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]" : "border-[var(--line)] bg-[var(--paper)] text-[var(--ink)]"}`}
-                onClick={() => togglePill(item.id)}
-              >
-                {item.label}
-              </button>
+                onToggle={() => {
+                  if (busy || searching) return;
+                  applyPrefs(togglePref(prefs, def.key));
+                }}
+                onIndex={(nextIndex) => {
+                  if (busy || searching) return;
+                  applyPrefs(setPrefIndex(prefs, def.key, nextIndex));
+                }}
+              />
             );
           })}
         </div>

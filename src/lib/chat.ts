@@ -1,5 +1,5 @@
 import type { BodyStyle, Fuel, MustHaveMatrix } from "@/lib/types";
-import { DEFAULT_MATRIX, emptyIntakeMatrix } from "@/lib/types";
+import { DEFAULT_MATRIX } from "@/lib/types";
 
 const BODIES: BodyStyle[] = ["suv", "crossover", "sedan", "minivan", "truck", "hatchback", "coupe", "wagon"];
 const FUELS: Fuel[] = ["gas", "hybrid", "plugin-hybrid", "ev"];
@@ -214,55 +214,13 @@ export function nextFollowUp(matrix: MustHaveMatrix): string | null {
 export function nextScoringPrompt(matrix: MustHaveMatrix): string | null {
   if (matrix.maxPrice == null || !matrix.body) return null;
   if (matrix.maxMiles == null && matrix.minYear == null) {
-    return "Any max miles or year floor? That helps scoring. Or press Search.";
+    return "Year and miles make ranking sharper. Or Search.";
   }
   return null;
 }
 
 export function introMessage(searchArea: string): string {
-  return `Near ${searchArea}. Tap what you want, then Search.`;
-}
-
-export type IntakePillGroup = "body" | "price" | "fuel";
-
-export type IntakePill = {
-  id: string;
-  label: string;
-  text: string;
-  group?: IntakePillGroup;
-};
-
-export const INTAKE_PILLS: IntakePill[] = [
-  { id: "suv", label: "SUV", text: "SUV", group: "body" },
-  { id: "sedan", label: "Sedan", text: "sedan", group: "body" },
-  { id: "truck", label: "Truck", text: "truck", group: "body" },
-  { id: "minivan", label: "Minivan", text: "minivan", group: "body" },
-  { id: "row3", label: "3-row", text: "3 row" },
-  { id: "p25", label: "$25k", text: "under 25k", group: "price" },
-  { id: "p35", label: "$35k", text: "under 35k", group: "price" },
-  { id: "p45", label: "$45k", text: "under 45k", group: "price" },
-  { id: "p60", label: "$60k", text: "under 60k", group: "price" },
-  { id: "awd", label: "AWD", text: "AWD" },
-  { id: "y2023", label: "2023+", text: "2023 or newer" },
-  { id: "plugin", label: "Plug-in", text: "plugin capable ideally not strictly", group: "fuel" },
-  { id: "hybrid", label: "Hybrid", text: "hybrid", group: "fuel" },
-  { id: "carplay", label: "CarPlay", text: "CarPlay" },
-];
-
-export function toggleIntakePill(selected: string[], id: string): string[] {
-  const pill = INTAKE_PILLS.find((item) => item.id === id);
-  if (!pill) return selected;
-  if (selected.includes(id)) return selected.filter((item) => item !== id);
-  const exclusive = pill.group ? new Set(INTAKE_PILLS.filter((item) => item.group === pill.group).map((item) => item.id)) : null;
-  const next = exclusive ? selected.filter((item) => !exclusive.has(item)) : selected;
-  return [...next, id];
-}
-
-export function matrixFromPills(ids: string[], searchArea: string): MustHaveMatrix {
-  return ids.reduce((draft, id) => {
-    const pill = INTAKE_PILLS.find((item) => item.id === id);
-    return pill ? parseMustHaves(pill.text, draft) : draft;
-  }, emptyIntakeMatrix(searchArea));
+  return `Near ${searchArea}. Tap a default. Hold and slide for other options.`;
 }
 
 const SEARCH_ANYWAY_RE = /\b(anyway|skip|no budget|whatever|just search|search anyway)\b/i;

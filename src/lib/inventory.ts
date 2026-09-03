@@ -6,6 +6,7 @@ import { SEARCH_RADIUS_MILES } from "@/lib/types";
 
 export type InventoryQuery = {
   matrix: MustHaveMatrix;
+  scoreMatrix?: MustHaveMatrix;
   mode: SearchMode;
   here?: { lat: number; lng: number } | null;
 };
@@ -265,6 +266,7 @@ async function fetchLive(
   matrix: MustHaveMatrix,
   mode: SearchMode,
   here?: { lat: number; lng: number } | null,
+  scoreMatrix?: MustHaveMatrix,
 ): Promise<LiveFetch> {
   const key = process.env.MARKETCHECK_API_KEY?.trim();
   if (!key) {
@@ -336,7 +338,10 @@ async function fetchLive(
       attempt.apply(params);
       last = await requestLive(`https://api.marketcheck.com/v2/search/car/active?${params.toString()}`, controller.signal);
       if (last.status && last.status >= 400) return last;
-      const prefer = mode === "grade" && matrix.preferFuel && !matrix.fuel ? marketcheckPowertrain(matrix.preferFuel) : null;
+      const prefer =
+        mode === "grade" && (scoreMatrix ?? matrix).preferFuel && !(scoreMatrix ?? matrix).fuel
+          ? marketcheckPowertrain((scoreMatrix ?? matrix).preferFuel)
+          : null;
       if (prefer && !params.get("powertrain_type")) {
         const extraParams = new URLSearchParams(params);
         extraParams.set("powertrain_type", prefer);
@@ -350,7 +355,7 @@ async function fetchLive(
         }
       }
       if (last.listings.length) {
-        const localHits = mode === "browse" ? last.listings.length : searchVehicles(last.listings, matrix).results.length;
+        const localHits = mode === "browse" ? last.listings.length : searchVehicles(last.listings, scoreMatrix ?? matrix, matrix).results.length;
         if (localHits) {
           if (widened) {
             last.notice = {
@@ -397,7 +402,7 @@ function sampleNear(origin: GeoPoint): Vehicle[] {
 
 export async function loadInventory(query: InventoryQuery): Promise<InventoryResult> {
   const origin = query.here ? originFromCoords(query.here) : resolveArea(query.matrix.searchArea);
-  const live = await fetchLive(origin, query.matrix, query.mode, query.here);
+  const live = await fetchLive(origin, query.matrix, query.mode, query.here, query.scoreMatrix);
   if (live.listings.length) {
     return { listings: live.listings, source: "live", origin, scanned: live.listings.length, notice: live.notice };
   }
