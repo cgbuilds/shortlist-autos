@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Gallery } from "@/components/Gallery";
 import { ViewToggle } from "@/components/ViewToggle";
-import { formatMustHaves, INTAKE_SUGGESTIONS, introMessage } from "@/lib/chat";
+import { formatMustHaves, INTAKE_PILLS, introMessage, matrixFromPills, nextFollowUp, nextScoringPrompt, toggleIntakePill } from "@/lib/chat";
 import { hasMustHaves, isImpressionMatrix } from "@/lib/grade";
 import { formatVehicleLine, gradeCaption, outboundLinks, readPhoneLocation, resultsHeadline, vehiclePhoto, vehicleTitle } from "@/lib/format";
 import { originFromCoords, TAMPA } from "@/lib/location";
@@ -21,29 +21,38 @@ function ChatSheet({
   matrix,
   invite,
   searching,
-  onClose,
   onDraft,
   onConfirm,
 }: {
   matrix: MustHaveMatrix;
   invite: boolean;
   searching: boolean;
-  onClose?: () => void;
   onDraft: (matrix: MustHaveMatrix) => void;
   onConfirm: (matrix: MustHaveMatrix) => void;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [messages, setMessages] = useState([{ role: "assistant", content: introMessage(matrix.searchArea) }]);
+  const [pills, setPills] = useState<string[]>([]);
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
 
   useEffect(() => {
-    setMessages((current) => {
-      if (current.length === 1 && current[0]?.role === "assistant") {
-        return [{ role: "assistant", content: introMessage(matrix.searchArea) }];
-      }
-      return current;
-    });
+    if (!pills.length) return;
+    onDraft(matrixFromPills(pills, matrix.searchArea));
+    // Re-apply taps if geolocation updates the area.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matrix.searchArea]);
+
+  function applyPills(nextIds: string[]) {
+    setPills(nextIds);
+    onDraft(matrixFromPills(nextIds, matrix.searchArea));
+  }
+
+  function togglePill(id: string) {
+    if (busy || searching) return;
+    applyPills(toggleIntakePill(pills, id));
+  }
+
+  const hint = nextFollowUp(matrix) ?? nextScoringPrompt(matrix);
 
   async function send(raw: string, confirm = false) {
     const value = raw.trim();
@@ -84,31 +93,37 @@ function ChatSheet({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 text-sm">
-        <p className="mb-3 text-xs text-[var(--muted)]">{formatMustHaves(matrix)}</p>
-        {messages.map((msg, i) => (
-          <p key={i} className={`mb-3 ${msg.role === "user" ? "text-[var(--ink)]" : "text-[var(--muted)]"}`}>
-            {msg.content}
-          </p>
-        ))}
-        {messages.length <= 2 ? (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {INTAKE_SUGGESTIONS.map((item) => (
+      <div className="shrink-0 px-3 pt-2">
+        <p className="text-sm text-[var(--muted)]">{introMessage(matrix.searchArea)}</p>
+        <p className="mt-1 text-xs text-[var(--ink)]">{formatMustHaves(matrix)}</p>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {INTAKE_PILLS.map((item) => {
+            const on = pills.includes(item.id);
+            return (
               <button
-                key={item.label}
+                key={item.id}
                 type="button"
+                aria-pressed={on}
                 disabled={busy || searching}
-                className="rounded-full border border-[var(--line)] bg-[var(--paper)] px-3 py-1 text-xs text-[var(--ink)] disabled:opacity-50"
-                onClick={() => void send(item.text)}
+                className={`rounded-full border px-2.5 py-1 text-xs leading-tight disabled:opacity-50 ${on ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]" : "border-[var(--line)] bg-[var(--paper)] text-[var(--ink)]"}`}
+                onClick={() => togglePill(item.id)}
               >
                 {item.label}
               </button>
-            ))}
-          </div>
-        ) : null}
+            );
+          })}
+        </div>
+        {hint ? <p className="mt-1.5 text-xs text-[var(--muted)]">{hint}</p> : null}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 text-sm">
+        {messages.map((msg, i) => (
+          <p key={i} className={`mb-2 ${msg.role === "user" ? "text-[var(--ink)]" : "text-[var(--muted)]"}`}>
+            {msg.content}
+          </p>
+        ))}
       </div>
       <form
-        className="shrink-0 border-t border-[var(--line)] p-3"
+        className="shrink-0 border-t border-[var(--line)] p-2"
         onSubmit={(e) => {
           e.preventDefault();
           void send(text);
@@ -118,8 +133,8 @@ function ChatSheet({
           value={text}
           autoComplete="off"
           enterKeyHint="send"
-          rows={2}
-          placeholder="SUV, $45k, AWD…"
+          rows={1}
+          placeholder="Or type anything else…"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -129,21 +144,16 @@ function ChatSheet({
           }}
           className={`w-full rounded-xl border bg-[var(--paper)] px-3 py-2 text-base ${invite ? "chat-composer-pulse border-[var(--accent)]" : "border-[var(--line)]"}`}
         />
-        <div className="mt-2 flex flex-wrap gap-2">
-          {onClose ? (
-            <button type="button" className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-[var(--line)] px-4 text-base sm:hidden" onClick={onClose}>
-              Done
-            </button>
-          ) : null}
+        <div className="mt-2 flex gap-2">
           <button
             type="button"
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[var(--ink)] px-4 text-base text-[var(--paper)] disabled:opacity-50"
+            className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-[var(--ink)] px-4 text-sm text-[var(--paper)] disabled:opacity-50"
             disabled={busy || searching}
             onClick={() => void send("search", true)}
           >
             {searching ? "Searching…" : "Search"}
           </button>
-          <button className="inline-flex min-h-11 flex-[0.7] items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-base text-white disabled:opacity-50" type="submit" disabled={busy || searching}>
+          <button className="inline-flex min-h-10 flex-[0.65] items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm text-white disabled:opacity-50" type="submit" disabled={busy || searching}>
             {busy ? "On it…" : "Send"}
           </button>
         </div>
@@ -236,11 +246,11 @@ function ChatModal({
         role="dialog"
         aria-label="Tell Chat what you need"
         aria-modal="true"
-        className={`relative z-10 flex w-full min-h-0 max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-2)] shadow-xl sm:h-[min(28rem,calc(100svh-6rem))] sm:max-h-[calc(100svh-6rem)] sm:w-[24rem] ${keyboard ? "h-full max-h-full max-w-none rounded-none pt-0 sm:max-w-md sm:rounded-2xl" : "h-[min(52%,26rem)] max-h-[min(70svh,28rem)]"}`}
+        className={`relative z-10 flex w-full min-h-0 max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-2)] shadow-xl sm:h-[min(30rem,calc(100svh-6rem))] sm:max-h-[calc(100svh-6rem)] sm:w-[24rem] ${keyboard ? "h-full max-h-full max-w-none rounded-none pt-0 sm:max-w-md sm:rounded-2xl" : "h-auto max-h-[min(88svh,34rem)]"}`}
       >
-        <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper-2)] px-3 py-2">
-          <p className="text-base font-medium">What are you looking for?</p>
-          <button type="button" className="inline-flex min-h-11 min-w-[4.5rem] items-center justify-center rounded-xl bg-[var(--ink)] px-4 text-base font-medium text-[var(--paper)]" onClick={onClose}>
+        <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper-2)] px-3 py-1.5">
+          <p className="text-sm font-medium">What are you looking for?</p>
+          <button type="button" className="inline-flex min-h-9 min-w-[3.75rem] items-center justify-center rounded-xl bg-[var(--ink)] px-3 text-sm font-medium text-[var(--paper)]" onClick={onClose}>
             Done
           </button>
         </div>
@@ -449,7 +459,7 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
         return;
       }
       const start = emptyIntakeMatrix(area);
-      setMatrix(start);
+      setMatrix((current) => (hasMustHaves(current) ? { ...current, searchArea: area } : start));
       setChatOpen(true);
     })();
     const html = document.documentElement;
@@ -562,7 +572,6 @@ export function Workspace({ initialMatrix }: { initialMatrix?: MustHaveMatrix })
           matrix={matrix}
           invite={invite && !confirmed}
           searching={searching}
-          onClose={closeChat}
           onDraft={(next) => {
             setMatrix(next);
             writeStoredSession({ matrix: next, confirmed: false });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chatReply, parseJsonObject, parseMustHaves, sanitizeMatrix } from "./chat";
+import { chatReply, matrixFromPills, parseJsonObject, parseMustHaves, sanitizeMatrix, toggleIntakePill } from "./chat";
 import { openRouterChat } from "./openrouter";
 import { BROWSE_MATRIX, DEFAULT_MATRIX, emptyIntakeMatrix } from "./types";
 
@@ -47,6 +47,32 @@ describe("chatReply", () => {
     expect(rescore).toBe(false);
     expect(awaitingConfirm).toBe(true);
     expect(reply).toMatch(/miles|year/i);
+  });
+});
+
+describe("intake pills", () => {
+  it("lets several feature pills stack", () => {
+    const ids = ["suv", "p45", "awd", "row3"].reduce((selected, id) => toggleIntakePill(selected, id), [] as string[]);
+    expect(ids).toEqual(["suv", "p45", "awd", "row3"]);
+    const matrix = matrixFromPills(ids, "Tampa, FL");
+    expect(matrix.body).toBe("suv");
+    expect(matrix.maxPrice).toBe(45000);
+    expect(matrix.awd).toBe(true);
+    expect(matrix.minSeats).toBe(7);
+  });
+
+  it("keeps one price and one body at a time", () => {
+    const ids = ["p25", "p45", "suv", "sedan"].reduce((selected, id) => toggleIntakePill(selected, id), [] as string[]);
+    expect(ids).toEqual(["p45", "sedan"]);
+    const matrix = matrixFromPills(ids, "Tampa, FL");
+    expect(matrix.maxPrice).toBe(45000);
+    expect(matrix.body).toBe("sedan");
+  });
+
+  it("clears a pill when tapped again", () => {
+    const on = toggleIntakePill([], "awd");
+    const off = toggleIntakePill(on, "awd");
+    expect(matrixFromPills(off, "Tampa, FL").awd).toBe(false);
   });
 });
 
