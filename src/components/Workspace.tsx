@@ -222,7 +222,7 @@ function ChatModal({
   if (!open) return null;
 
   return (
-    <div ref={root} className="fixed z-[2000] flex items-end overflow-hidden sm:items-end sm:justify-end sm:p-6">
+    <div ref={root} className={`fixed z-[2000] flex overflow-hidden ${keyboard ? "items-end" : "items-center justify-center p-4 sm:p-8"}`}>
       <button
         type="button"
         className="absolute inset-0 bg-[color-mix(in_oklab,var(--ink)_18%,transparent)]"
@@ -236,7 +236,7 @@ function ChatModal({
         role="dialog"
         aria-label="Tell Chat what you need"
         aria-modal="true"
-        className={`relative z-10 flex w-full min-h-0 flex-col overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--paper-2)] shadow-xl sm:mb-12 sm:mr-2 sm:h-[min(28rem,calc(100svh-5rem))] sm:max-h-[calc(100svh-5rem)] sm:w-[24rem] sm:rounded-2xl sm:pt-0 ${keyboard ? "h-full max-h-full pt-0" : "h-[min(52%,26rem)] max-h-[min(52%,28rem)] pt-1"}`}
+        className={`relative z-10 flex w-full min-h-0 max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-2)] shadow-xl sm:h-[min(28rem,calc(100svh-6rem))] sm:max-h-[calc(100svh-6rem)] sm:w-[24rem] ${keyboard ? "h-full max-h-full max-w-none rounded-none pt-0 sm:max-w-md sm:rounded-2xl" : "h-[min(52%,26rem)] max-h-[min(70svh,28rem)]"}`}
       >
         <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper-2)] px-3 py-2">
           <p className="text-base font-medium">What are you looking for?</p>
