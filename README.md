@@ -8,7 +8,7 @@ Sister product: homes at [shortlist.casa](https://shortlist.casa).
 
 - Demo sign-in (`Continue in demo mode`)
 - Chat sets a must-have matrix (area, body, budget, miles, year, AWD, seats, CarPlay, tow, fuel)
-- First look is a nearby shortlist of cars from the last 3 years, ≤ $45k, ≤ 70k miles, then scored in a photo **Gallery** (default) or map **Split view**
+- First screen is a small chat over Split (map + empty list). Location is already set. Search pulls the scored shortlist.
 - Copy a compressed share link (`/s#s1.…`)
 
 ## Run locally

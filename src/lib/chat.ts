@@ -80,8 +80,8 @@ export function formatMustHaves(matrix: MustHaveMatrix): string {
   if (matrix.backupCamera) parts.push("backup camera");
   if (matrix.tow) parts.push("tow");
   if (matrix.fuel) parts.push(matrix.fuel);
-  else if (matrix.preferFuel) parts.push(`prefers ${matrix.preferFuel}`);
-  return parts.join(" · ") || "No must-haves yet";
+  else   if (matrix.preferFuel) parts.push(`prefers ${matrix.preferFuel}`);
+  return parts.join(" · ") || "Location only — add what you want";
 }
 
 function pluginIsSoft(text: string): boolean {
@@ -204,22 +204,67 @@ export function isConfirmText(text: string): boolean {
   return CONFIRM_RE.test(text.trim());
 }
 
+export function nextFollowUp(matrix: MustHaveMatrix): string | null {
+  if (matrix.maxPrice == null) return "What's your max price?";
+  if (!matrix.body) return "SUV, sedan, truck, or no body preference?";
+  return null;
+}
+
+/** Optional detail that improves scoring; does not block Search. */
+export function nextScoringPrompt(matrix: MustHaveMatrix): string | null {
+  if (matrix.maxPrice == null || !matrix.body) return null;
+  if (matrix.maxMiles == null && matrix.minYear == null) {
+    return "Any max miles or year floor? That helps scoring. Or press Search.";
+  }
+  return null;
+}
+
+export function introMessage(searchArea: string): string {
+  return `We'll look near ${searchArea}. What do you want in a car? Then press Search.`;
+}
+
+export const INTAKE_SUGGESTIONS: Array<{ label: string; text: string }> = [
+  { label: "SUV under $45k", text: "SUV under 45k" },
+  { label: "3-row family", text: "3 row SUV" },
+  { label: "AWD, 2023+", text: "AWD 2023 or newer" },
+  { label: "Plug-in if I can", text: "plugin capable ideally not strictly" },
+];
+
+const SEARCH_ANYWAY_RE = /\b(anyway|skip|no budget|whatever|just search|search anyway)\b/i;
+
 export function chatReply(text: string, draft: MustHaveMatrix, confirm = false): ChatReply {
-  if (confirm || isConfirmText(text)) {
+  const wantsSearch = confirm || isConfirmText(text);
+  const skipFollowUp = SEARCH_ANYWAY_RE.test(text);
+  if (wantsSearch) {
+    const followUp = skipFollowUp ? null : nextFollowUp(draft);
+    if (followUp) {
+      return {
+        matrix: draft,
+        rescore: false,
+        awaitingConfirm: true,
+        reply: followUp,
+      };
+    }
     const summary = formatMustHaves(draft);
     return {
       matrix: draft,
       rescore: true,
       awaitingConfirm: false,
-      reply: `Confirmed: ${summary}. Searching nearby listings and grading them now.`,
+      reply: `Searching near ${draft.searchArea}. ${summary}.`,
     };
   }
   const matrix = parseMustHaves(text, draft);
   const summary = formatMustHaves(matrix);
+  const followUp = nextFollowUp(matrix);
+  const scoring = followUp ? null : nextScoringPrompt(matrix);
   return {
     matrix,
     rescore: false,
     awaitingConfirm: true,
-    reply: `I heard: ${summary}. Confirm these must-haves and I’ll run a fresh search and grade the matches.`,
+    reply: followUp
+      ? `Got ${summary}. ${followUp}`
+      : scoring
+        ? `Got ${summary}. ${scoring}`
+        : `Got ${summary}. Press Search when you’re ready.`,
   };
 }

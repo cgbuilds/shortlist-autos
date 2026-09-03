@@ -92,7 +92,23 @@ export function browseMatrix(searchArea = "Tampa, FL", now = new Date()): MustHa
   };
 }
 
-/** Open the app on a clean nearby shortlist until the user confirms their own must-haves. */
+/** Empty intake: location only. Cars wait until the shopper searches. */
+export function emptyIntakeMatrix(searchArea = "Tampa, FL"): MustHaveMatrix {
+  return {
+    searchArea,
+    maxPrice: null,
+    maxMiles: null,
+    minYear: null,
+    body: null,
+    awd: false,
+    minSeats: 5,
+    carplay: false,
+    backupCamera: false,
+    tow: false,
+    fuel: null,
+    preferFuel: null,
+  };
+}
 export const BROWSE_MATRIX: MustHaveMatrix = browseMatrix();
 
 /** Example confirmed shortlist (tests / chat parser baseline). */
